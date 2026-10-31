@@ -102,6 +102,9 @@ Test("Manual file errors do not expose earlier data", () =>
 
 VmBridgeSpecs.Run(Test, Check);
 VmTelemetrySpecs.Run(Test, Check);
+StandaloneTelemetrySpecs.Run(Test, Check);
+StandaloneTelemetryHttpSpecs.Run(Test, Check);
+StandaloneVmPulseSpecs.Run(Test, Check);
 VmTelemetryWatchSpecs.Run(Test, Check);
 VmPulseObservationSpecs.Run(Test, Check);
 VmControllerBindingSpecs.Run(Test, Check);

@@ -5,6 +5,8 @@ public partial class MainWindow
     private enum VmOperation
     {
         None,
+        ControllerStatus,
+        PinnedTelemetryRead,
         ShortWatch,
         BoundPreflight,
         SupervisedPulse,
@@ -48,6 +50,8 @@ public partial class MainWindow
     private void UpdateVmOperationControls()
     {
         bool idle = !_closing && _vmOperationCancellation is null;
+        VmRefreshButton.IsEnabled = idle;
+        VmTelemetryButton.IsEnabled = idle;
         VmPulseButton.IsEnabled = idle;
         VmPreflightButton.IsEnabled = idle;
         VmWatchStartButton.IsEnabled = idle;
@@ -66,13 +70,15 @@ public partial class MainWindow
     {
         foreach (VmOperation kind in new[]
         {
+            VmOperation.ControllerStatus, VmOperation.PinnedTelemetryRead,
             VmOperation.ShortWatch, VmOperation.BoundPreflight,
             VmOperation.SupervisedPulse, VmOperation.SustainedQualification,
             VmOperation.SaveEvidence
         })
         {
             CancellationTokenSource? run = TryBeginVmOperation(kind);
-            if (run is null || VmPulseButton.IsEnabled || VmPreflightButton.IsEnabled ||
+            if (run is null || VmRefreshButton.IsEnabled || VmTelemetryButton.IsEnabled ||
+                VmPulseButton.IsEnabled || VmPreflightButton.IsEnabled ||
                 VmWatchStartButton.IsEnabled || VmQualifyStartButton.IsEnabled ||
                 VmQualifySaveButton.IsEnabled ||
                 TryBeginVmOperation(VmOperation.SupervisedPulse) is not null)
@@ -81,7 +87,8 @@ public partial class MainWindow
             UpdateVmOperationControls();
             if (TryBeginVmOperation(VmOperation.BoundPreflight) is not null) return false;
             EndVmOperation(kind, run);
-            if (!VmPulseButton.IsEnabled || !VmPreflightButton.IsEnabled ||
+            if (!VmRefreshButton.IsEnabled || !VmTelemetryButton.IsEnabled ||
+                !VmPulseButton.IsEnabled || !VmPreflightButton.IsEnabled ||
                 !VmWatchStartButton.IsEnabled || !VmQualifyStartButton.IsEnabled)
                 return false;
         }

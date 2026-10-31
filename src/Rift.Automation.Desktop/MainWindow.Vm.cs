@@ -12,31 +12,46 @@ public partial class MainWindow
 {
     private async void VmRefreshClicked(object sender, RoutedEventArgs e)
     {
-        if (_closing || !VmRefreshButton.IsEnabled) return;
-        VmRefreshButton.IsEnabled = false;
+        CancellationTokenSource? run = TryBeginVmOperation(VmOperation.ControllerStatus);
+        if (run is null) return;
+        string lab1Config = VmLab1Config.Text;
+        string lab2Config = VmLab2Config.Text;
         VmLab1Status.Text = "Lab 1: checking authenticated controller...";
         VmLab2Status.Text = "Lab 2: checking authenticated controller...";
         try
         {
-            var one = GetVmStatusAsync(VmLab1Config.Text);
-            var two = GetVmStatusAsync(VmLab2Config.Text);
+            var one = GetVmStatusAsync(lab1Config, run.Token);
+            var two = GetVmStatusAsync(lab2Config, run.Token);
             await Task.WhenAll(one, two);
-            if (_closing) return;
-            VmLab1Status.Text = "Lab 1: " + FormatVmStatus(await one);
-            VmLab2Status.Text = "Lab 2: " + FormatVmStatus(await two);
+            if (!OwnsVmOperation(VmOperation.ControllerStatus, run) ||
+                run.IsCancellationRequested) return;
+            VmLab1Status.Text = "Lab 1: " + FormatVmStatus(one.Result);
+            VmLab2Status.Text = "Lab 2: " + FormatVmStatus(two.Result);
+        }
+        catch (OperationCanceledException) when (run.IsCancellationRequested)
+        {
+            if (!_closing)
+                VmLab1Status.Text = VmLab2Status.Text = "Controller check cancelled.";
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex.GetType().Name);
+            if (!_closing)
+                VmLab1Status.Text = VmLab2Status.Text = "Controller check interrupted.";
         }
         finally
         {
-            if (!_closing) VmRefreshButton.IsEnabled = true;
+            EndVmOperation(VmOperation.ControllerStatus, run);
         }
     }
 
-    private static async Task<VmControllerResult> GetVmStatusAsync(string configPath)
+    private static async Task<VmControllerResult> GetVmStatusAsync(
+        string configPath, CancellationToken cancellationToken)
     {
         try
         {
             using var bridge = new VmControllerBridge(configPath);
-            return await bridge.StatusAsync();
+            return await bridge.StatusAsync(cancellationToken);
         }
         catch (Exception e) when (e is ArgumentException or IOException
             or UnauthorizedAccessException or InvalidOperationException or JsonException
@@ -57,24 +72,38 @@ public partial class MainWindow
 
     private async void VmTelemetryClicked(object sender, RoutedEventArgs e)
     {
-        if (_closing || !VmTelemetryButton.IsEnabled) return;
-        VmTelemetryButton.IsEnabled = false;
+        CancellationTokenSource? run = TryBeginVmOperation(VmOperation.PinnedTelemetryRead);
+        if (run is null) return;
+        string lab1Pin = VmLab1Pin.Text;
+        string lab2Pin = VmLab2Pin.Text;
         VmLab1Telemetry.Text = "Lab 1 telemetry: checking...";
         VmLab2Telemetry.Text = "Lab 2 telemetry: checking...";
         try
         {
-            string lab1Pin = VmLab1Pin.Text;
-            string lab2Pin = VmLab2Pin.Text;
-            Task<VmTelemetrySnapshot> one = Task.Run(() => VmTelemetryReader.ReadPinned(lab1Pin));
-            Task<VmTelemetrySnapshot> two = Task.Run(() => VmTelemetryReader.ReadPinned(lab2Pin));
+            Task<VmTelemetrySnapshot> one = Task.Run(
+                () => VmTelemetryReader.ReadPinned(lab1Pin), run.Token);
+            Task<VmTelemetrySnapshot> two = Task.Run(
+                () => VmTelemetryReader.ReadPinned(lab2Pin), run.Token);
             await Task.WhenAll(one, two);
-            if (_closing) return;
+            if (!OwnsVmOperation(VmOperation.PinnedTelemetryRead, run) ||
+                run.IsCancellationRequested) return;
             VmLab1Telemetry.Text = FormatVmTelemetry(one.Result);
             VmLab2Telemetry.Text = FormatVmTelemetry(two.Result);
         }
+        catch (OperationCanceledException) when (run.IsCancellationRequested)
+        {
+            if (!_closing)
+                VmLab1Telemetry.Text = VmLab2Telemetry.Text = "Telemetry check cancelled.";
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex.GetType().Name);
+            if (!_closing)
+                VmLab1Telemetry.Text = VmLab2Telemetry.Text = "Telemetry check interrupted.";
+        }
         finally
         {
-            if (!_closing) VmTelemetryButton.IsEnabled = true;
+            EndVmOperation(VmOperation.PinnedTelemetryRead, run);
         }
     }
 

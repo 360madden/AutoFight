@@ -32,7 +32,7 @@ internal static class VmTelemetrySpecs
         return pin.ToJsonString();
     }
 
-    private static string Receipt(DateTimeOffset now) => JsonSerializer.Serialize(new
+    internal static string Receipt(DateTimeOffset now) => JsonSerializer.Serialize(new
     {
         schemaVersion = 1,
         receiverInstance = "receiver-test-01",
