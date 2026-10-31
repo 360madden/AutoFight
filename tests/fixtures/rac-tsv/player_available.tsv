@@ -1,0 +1,19 @@
+RAC-TSV	1
+M	schemaVersion	number	available	1	
+M	addonVersion	string	available	0.1.0	
+M	sequence	number	available	1	
+M	source	string	available	Inspect.Unit.Detail	
+M	subject	string	available	player	
+M	mode	string	available	manual	
+M	clockKind	string	available	none	
+M	sampledAt	number	unavailable		not_sampled
+M	recordStatus	string	available	available	
+M	recordReason	string	unavailable		not_applicable
+F	id	string	unavailable		api_nil
+F	name	string	available	Joey	
+F	level	number	available	70	
+F	coordX	number	available	0	
+F	coordY	number	unavailable		api_nil
+F	coordZ	number	available	-3.25	
+F	combat	boolean	available	false	
+END	17

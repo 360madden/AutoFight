@@ -1,0 +1,26 @@
+# Secrets and machine-specific settings
+.env
+.env.*
+!.env.example
+*.user
+*.local.json
+
+# Transient editor/build files
+.vs/
+.vscode/
+.idea/
+bin/
+obj/
+build/
+dist/
+*.tmp
+*.swp
+*.bak
+*.log
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local or sensitive captures; curated fixtures belong in tests/
+artifacts/local/
+captures/private/

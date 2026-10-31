@@ -1,0 +1,12 @@
+RAC-TSV	1
+M	schemaVersion	number	available	1	
+M	addonVersion	string	available	0.1.0	
+M	sequence	number	available	3	
+M	source	string	available	Inspect.Unit.Lookup	
+M	subject	string	available	target	
+M	mode	string	available	manual	
+M	clockKind	string	available	none	
+M	sampledAt	number	unavailable		not_sampled
+M	recordStatus	string	available	unavailable	
+M	recordReason	string	available	target_unresolved	
+END	10

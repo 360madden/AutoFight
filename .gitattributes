@@ -1,0 +1,4 @@
+# Preserve byte-exact RAC unit TSV fixtures from the separate Rift API collector.
+tests/fixtures/rac-tsv/*.tsv -text whitespace=-trailing-space
+# Replay fixtures must also retain their exact bytes across Windows checkouts.
+tests/fixtures/replay/*.json -text

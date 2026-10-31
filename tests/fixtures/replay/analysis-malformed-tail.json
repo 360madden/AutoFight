@@ -1,0 +1,37 @@
+{
+  "schema": "rift-replay/1",
+  "origin": "synthetic",
+  "name": "Reject malformed final step atomically",
+  "steps": [
+    {
+      "kind": "reset",
+      "atMs": 0,
+      "sessionId": "fixture",
+      "buildId": "synthetic-v1",
+      "epoch": 1
+    },
+    {
+      "kind": "sample",
+      "atMs": 10,
+      "sessionId": "fixture",
+      "buildId": "synthetic-v1",
+      "epoch": 1,
+      "sequence": 1,
+      "status": "present",
+      "value": {
+        "x": 0,
+        "y": 1,
+        "z": 2
+      },
+      "acquiredStartMs": 10,
+      "acquiredEndMs": 10,
+      "receivedMs": 10,
+      "sourceId": "fixture"
+    },
+    {
+      "kind": "tick",
+      "atMs": 20,
+      "unexpected": true
+    }
+  ]
+}

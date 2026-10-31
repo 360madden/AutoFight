@@ -1,0 +1,19 @@
+RAC-TSV	1
+M	schemaVersion	number	available	1	
+M	addonVersion	string	available	0.1.0	
+M	sequence	number	available	2	
+M	source	string	available	Inspect.Unit.Detail	
+M	subject	string	available	target	
+M	mode	string	available	manual	
+M	clockKind	string	available	none	
+M	sampledAt	number	unavailable		not_sampled
+M	recordStatus	string	available	available	
+M	recordReason	string	unavailable		not_applicable
+F	id	string	available	uA	
+F	name	string	available	Practice%20Dummy	
+F	level	number	unavailable		masked_level
+F	coordX	number	available	0	
+F	coordY	number	unavailable		api_nil
+F	coordZ	number	unavailable		api_nil
+F	combat	boolean	available	false	
+END	17

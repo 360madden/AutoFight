@@ -1,0 +1,121 @@
+{
+  "schema": "rift-replay/1",
+  "origin": "synthetic",
+  "name": "Position freshness and session recovery",
+  "steps": [
+    {
+      "kind": "reset",
+      "atMs": 0,
+      "sessionId": "demo-1",
+      "buildId": "synthetic-v1",
+      "epoch": 1
+    },
+    {
+      "kind": "sample",
+      "atMs": 10,
+      "sessionId": "demo-1",
+      "buildId": "synthetic-v1",
+      "epoch": 1,
+      "sequence": 1,
+      "status": "present",
+      "value": {
+        "x": 0,
+        "y": 10,
+        "z": 20
+      },
+      "acquiredStartMs": 0,
+      "acquiredEndMs": 0,
+      "receivedMs": 10,
+      "sourceId": "demo"
+    },
+    {
+      "kind": "sample",
+      "atMs": 260,
+      "sessionId": "demo-1",
+      "buildId": "synthetic-v1",
+      "epoch": 1,
+      "sequence": 2,
+      "status": "present",
+      "value": {
+        "x": 0,
+        "y": 10,
+        "z": 20
+      },
+      "acquiredStartMs": 250,
+      "acquiredEndMs": 250,
+      "receivedMs": 260,
+      "sourceId": "demo"
+    },
+    {
+      "kind": "tick",
+      "atMs": 1501
+    },
+    {
+      "kind": "sample",
+      "atMs": 1601,
+      "sessionId": "demo-1",
+      "buildId": "synthetic-v1",
+      "epoch": 1,
+      "sequence": 3,
+      "status": "error",
+      "value": null,
+      "acquiredStartMs": 1600,
+      "acquiredEndMs": 1600,
+      "receivedMs": 1601,
+      "sourceId": "demo",
+      "reason": "synthetic read failure"
+    },
+    {
+      "kind": "gap",
+      "atMs": 1700,
+      "reason": "synthetic stream gap"
+    },
+    {
+      "kind": "reset",
+      "atMs": 1800,
+      "sessionId": "demo-2",
+      "buildId": "synthetic-v1",
+      "epoch": 2
+    },
+    {
+      "kind": "sample",
+      "atMs": 1810,
+      "sessionId": "demo-1",
+      "buildId": "synthetic-v1",
+      "epoch": 1,
+      "sequence": 4,
+      "status": "present",
+      "value": {
+        "x": 999,
+        "y": 999,
+        "z": 999
+      },
+      "acquiredStartMs": 1790,
+      "acquiredEndMs": 1790,
+      "receivedMs": 1810,
+      "sourceId": "demo"
+    },
+    {
+      "kind": "sample",
+      "atMs": 1905,
+      "sessionId": "demo-2",
+      "buildId": "synthetic-v1",
+      "epoch": 2,
+      "sequence": 1,
+      "status": "present",
+      "value": {
+        "x": 10,
+        "y": 20,
+        "z": 30
+      },
+      "acquiredStartMs": 1900,
+      "acquiredEndMs": 1900,
+      "receivedMs": 1905,
+      "sourceId": "demo"
+    },
+    {
+      "kind": "tick",
+      "atMs": 3006
+    }
+  ]
+}
