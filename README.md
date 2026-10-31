@@ -16,6 +16,8 @@ AutoFight was separated from the unrelated RIFT API research repository on Octob
 
 The application must not be described as a finished autofighting bot. Controller acceptance, telemetry freshness and actual game response are different facts.
 
+**Standalone-runtime boundary:** A self-contained EXE is already buildable, but live VMware observation and input still consume external RR2 receiver/config/controller artifacts. The next development milestone ports and packages an AutoFight-owned guest reader, host receiver and bounded controller, then proves fresh XYZ and observed command feedback with no RR2 runtime service. Reference repositories remain read-only scaffolding.
+
 ## Build and run
 
 Use **Windows PowerShell**:
@@ -51,7 +53,8 @@ The verified local AutoFight 0.5.7 executable is at C:\work\AutoFight\artifacts\
 - SESSION_HANDOFF.md — resume point, exact Git/source routing, verification, and next functional milestone
 
 - docs/current-status.md — current factual implementation and next gate
-- docs/automation-platform-master-prompt-v3.md — corrected development directive
+- docs/standalone-autonomous-directive-2026-10-31.md — current user-directed standalone runtime milestone and parallel development requirements
+- docs/automation-platform-master-prompt-v3.md — earlier corrected design directive
 - docs/automation-platform-architecture.md — design and contracts
 - docs/automation-platform-roadmap.md — milestones
 - docs/MIGRATION-2026-10-31.md — exact migration and source history

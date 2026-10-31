@@ -61,6 +61,8 @@ public static class VmPulseObservationChecks
     private static bool SameIdentity(
         string expectedLab, VmTelemetrySnapshot? initial, VmTelemetrySnapshot? later) =>
         IsUsable(expectedLab, initial) && IsUsable(expectedLab, later) &&
+        // Stream IDs alone do not bind the source IP or executable identity.
+        VmControllerBindingChecks.HasStableSourceBinding(expectedLab, initial, later) &&
         string.Equals(initial!.StreamIdentity, later!.StreamIdentity, StringComparison.Ordinal) &&
         initial.GameProcessId == later.GameProcessId &&
         initial.AddonEpoch == later.AddonEpoch;

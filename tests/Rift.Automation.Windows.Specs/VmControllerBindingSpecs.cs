@@ -317,8 +317,8 @@ internal static class VmControllerBindingSpecs
                 {
                     ReaderSourceAddress = "192.168.56.129"
                 };
-                check(VmPulseObservationChecks.CanRevalidate("lab1", before, addressOnly),
-                    "regression reproduces historical stream-only gap");
+                check(!VmPulseObservationChecks.CanRevalidate("lab1", before, addressOnly),
+                    "shared source continuity now closes the historical stream-only gap");
             });
             test("VM binding resolves relative VMX against config directory", () =>
             {

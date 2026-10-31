@@ -7,7 +7,9 @@ internal static class VmPulseObservationSpecs
         long sequence = 8, double clock = 20, long epoch = 2, double x = 10) =>
         new(lab, "fresh_observed", "pinned", DateTimeOffset.UtcNow,
             DateTimeOffset.UtcNow, 20, outer, sequence, epoch, 3300,
-            x, 15, 20, "whole-readable-private", stream, clock);
+            x, 15, 20, "whole-readable-private", stream, clock,
+            "192.168.56.128", 638000000000000000L,
+            @"C:\Games\RIFT\rift_x64.exe", new string('a', 64));
 
     internal static void Run(Action<string, Action> test, Action<bool, string> check)
     {
@@ -201,6 +203,44 @@ internal static class VmPulseObservationSpecs
                 VmPulseObservationChecks.IsAcceptedFeedback("lab1", before, recovered),
                 "only an actual new frame above retained watermark qualifies");
         });
+        test("Pulse full source identity survives confirmation and feedback only unchanged", () =>
+        {
+            VmTelemetrySnapshot before = Fresh();
+            VmTelemetrySnapshot advanced = before with
+            {
+                OuterSequence = 11, AddonSequence = 9, AddonClock = 21
+            };
+            check(VmPulseObservationChecks.CanRevalidate("lab1", before, advanced),
+                "unchanged full identity permits a newer source");
+            var acceptedWatch = new VmTelemetryWatchTracker("lab1");
+            acceptedWatch.Observe(before, 0);
+            VmTelemetryWatchReport accepted = acceptedWatch.Observe(advanced, 400);
+            check(VmPulseObservationChecks.IsAcceptedFeedback("lab1", before, accepted),
+                "matching full source and advancing producer accepted");
+
+            VmTelemetrySnapshot[] swapped =
+            {
+                advanced with { ReaderSourceAddress = "192.168.56.129" },
+                advanced with { ReaderSourceAddress = null },
+                advanced with { GameProcessStartUtcTicks = before.GameProcessStartUtcTicks + 1 },
+                advanced with { GameExecutablePath = @"C:\Games\Other\rift_x64.exe" },
+                advanced with { GameExecutableSha256 = new string('b', 64) },
+                advanced with { GameExecutableSha256 = null }
+            };
+            foreach (VmTelemetrySnapshot candidate in swapped)
+            {
+                check(!VmPulseObservationChecks.CanRevalidate("lab1", before, candidate),
+                    "pre-send continuity must reject altered full binding");
+                check(!VmPulseObservationChecks.IsNewerMatching("lab1", before, candidate),
+                    "pairwise feedback must reject altered full binding");
+                var tracker = new VmTelemetryWatchTracker("lab1");
+                tracker.Observe(before, 0);
+                VmTelemetryWatchReport report = tracker.Observe(candidate, 400);
+                check(!VmPulseObservationChecks.IsAcceptedFeedback("lab1", before, report),
+                    "post-action feedback must reject altered full binding");
+            }
+        });
+
         test("Pulse feedback cannot continue after observed stream replacement", () =>
         {
             VmTelemetrySnapshot before = Fresh();
