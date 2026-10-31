@@ -2,9 +2,11 @@
   <Folder Name="/src/">
     <Project Path="src/Rift.Automation.Core/Rift.Automation.Core.csproj" />
     <Project Path="src/Rift.Automation.Desktop/Rift.Automation.Desktop.csproj" />
+    <Project Path="src/Rift.Automation.Guest/Rift.Automation.Guest.csproj" />
     <Project Path="src/Rift.Automation.Windows/Rift.Automation.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Rift.Automation.Guest.Specs/Rift.Automation.Guest.Specs.csproj" />
     <Project Path="tests/Rift.Automation.Specs/Rift.Automation.Specs.csproj" />
     <Project Path="tests/Rift.Automation.Windows.Specs/Rift.Automation.Windows.Specs.csproj" />
   </Folder>

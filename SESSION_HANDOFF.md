@@ -6,6 +6,39 @@
 **Branch / verified baseline commit:** **main / 9aea36a91d839c54e4f14e45bb8054909aa9251b**
 **Application version:** **0.5.7**, read from src/Directory.Build.props. Check that file again when resuming.
 
+## New same-day Milestone 1 addendum (read first)
+
+The baseline commit and five-project acceptance below describe the **earlier repository
+migration**, not the latest implementation. Always inspect current Git HEAD,
+AGENTS.md, docs/current-status.md and
+docs/M1-standalone-guest-port-2026-10-31.md before resuming.
+
+- AutoFight now has a seven-project solution with its **own guest-reader**
+  Windows x64 executable and 16 selectively adapted RR2 source files. It
+  compiles without RR2 projects/assemblies. The guest publisher includes
+  one AutoFight GuestReader EXE and six AutoFight-owned Lua addon files.
+  Binding is /afbind, and RR2A1/RR2L1 remain compatibility wire markers.
+- The Windows assembly now owns an authenticated in-process observation
+  listener, typed delivery/XYZ ingest with pinned identity/sequence guards,
+  and a bounded synthetic keyboard executor. The WPF Refresh and pinned
+  Telemetry buttons share the VM operation exclusion/cancellation gate.
+- Current offline acceptance: Release solution build zero warnings/errors,
+  **149/149 Core**, **141/141 Windows/VM**, **13/13 Guest**, WPF smoke five
+  categories. Job IDs and port provenance are in the milestone document.
+- This does **not** establish live RIFT XYZ, eight-minute sustained freshness,
+  native guest input, a bundled/connected host control transport, or movement.
+  The new guest reader and listener are **not yet integrated into the WPF live
+  session**; the old controller bridge remains a legacy option.
+- Read-only current historical pins for Lab 1 and Lab 2 both reported
+  **reader_not_running**. No addon was installed, VM started/stopped, guest
+  helper deployed, game scan started, or gameplay input sent during the port.
+- Next: wire an AutoFight-owned host receiver to a reviewed private config
+  and live UI; after separate lab permission deploy/bind the guest reader
+  and obtain live XYZ without RR2 services. Then qualify 480 seconds and
+  port the RR2 guest-control safety chain, before a separately authorized
+  observed movement pulse.
+
+
 ## 1. Non-negotiable routing correction
 
 The previous assistant mistakenly built AutoFight inside **C:\work\Rift API**, an older independent RIFT API/Lua collector research repository. Joey caught this on October 31 and authorized separating the application.

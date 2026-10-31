@@ -1,0 +1,8 @@
+Identifier = "AutoFight"
+Name = "AutoFight"
+Description = "AutoFight-owned bounded RIFT observations and explicit reader binding"
+Author = "360madden"
+Email = "360madden@gmail.com"
+Version = "0.1.0"
+Environment = "4.4"
+RunOnStartup = { "wire.lua", "producer.lua", "live.lua", "guidance.lua", "main.lua" }

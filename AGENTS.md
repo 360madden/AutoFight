@@ -26,6 +26,7 @@ In Windows PowerShell, from C:\work\AutoFight:
 dotnet build .\Rift.Automation.slnx -c Release
 dotnet run --project .\tests\Rift.Automation.Specs\Rift.Automation.Specs.csproj -c Release -- selftest
 dotnet run --project .\tests\Rift.Automation.Windows.Specs\Rift.Automation.Windows.Specs.csproj -c Release
+dotnet run --project .\tests\Rift.Automation.Guest.Specs\Rift.Automation.Guest.Specs.csproj -c Release
 dotnet run --project .\src\Rift.Automation.Desktop\Rift.Automation.Desktop.csproj -c Release -- --smoke-test
 ~~~
 
@@ -34,5 +35,7 @@ These checks exercise offline/synthetic behavior. Actual VMware telemetry, movem
 ## Current practical priority
 
 Implement and independently verify AutoFight-owned guest telemetry, host receiver, and bounded controller capabilities, adapting proven RR2 code as needed without changing that repository. RR2-owned source pins may be temporary comparison fixtures, but do not satisfy standalone-runtime acceptance. Qualify fresh sustained XYZ in one existing VMware lab without RR2 runtime services; then demonstrate one specifically authorized bounded command and independently observed position feedback. Do not equate controller HTTP success with in-game response. Combat/target/navigation features follow an accepted closed-loop movement baseline.
+
+The first AutoFight-owned guest reader and addon source port plus its exact remaining runtime gates are documented in docs/M1-standalone-guest-port-2026-10-31.md. It does not authorize installing an addon or starting a VM/game scan, and it does not yet replace legacy controller services in the WPF runtime.
 
 The copied historical master prompt v2 incorrectly names Rift API as the target. Never follow that path choice; version 3 supersedes it.
