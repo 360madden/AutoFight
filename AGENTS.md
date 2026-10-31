@@ -6,7 +6,7 @@ The authoritative AutoFight application repository is **C:\work\AutoFight**. It 
 
 The current implementation is a standalone C#/.NET 10 Windows WPF application. Keep the platform-neutral Core, Windows-specific readers/controllers, and WPF UI separate. Keep required parser source in this repository. Existing namespace/assembly names beginning Rift.Automation are historical internal identifiers, not a repository routing instruction.
 
-Read README.md, docs/current-status.md, docs/automation-platform-architecture.md and docs/automation-platform-roadmap.md before substantive development. The saved directive is docs/automation-platform-master-prompt-v3.md. Older copied documents and old commit IDs are historical evidence from Rift API, not a current path or a second source of truth.
+Read SESSION_HANDOFF.md first, then README.md, docs/current-status.md, docs/automation-platform-architecture.md and docs/automation-platform-roadmap.md before substantive development. The saved directive is docs/automation-platform-master-prompt-v3.md. Older copied documents and old commit IDs are historical evidence from Rift API, not a current path or a second source of truth.
 
 ## Workflow
 

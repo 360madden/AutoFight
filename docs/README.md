@@ -2,7 +2,7 @@
 
 **Authoritative application repository: C:\work\AutoFight.**
 
-Read in this order:
+Read in this order (start with root SESSION_HANDOFF.md for a new session):
 
 1. current-status.md — verified post-migration state.
 2. automation-platform-master-prompt-v3.md — current directive; v2 is superseded.

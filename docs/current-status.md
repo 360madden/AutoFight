@@ -38,4 +38,4 @@ Exact Workbridge job IDs and provenance are recorded in MIGRATION-2026-10-31.md.
 3. Once identities and permissions are current, conduct one separately supervised bounded movement pulse in a chosen lab; compare independent before/after game position.
 4. Only after that closed-loop control proof, implement live target selection, casting and measured movement in small functional slices.
 
-The original Rift API worktree remains untouched and contains the older manual collector plus a preserved draft of this application's v0.5.7 export changes. Future AutoFight commits must be made only in the new repository.
+The original Rift API research repo retains the older manual collector and five unchanged uncommitted v0.5.7 draft files. Its AGENTS.md/README.md now redirect AutoFight development here (source redirect commit 752e133); the historical app files were not deleted. Future AutoFight commits must be made only in the new repository.

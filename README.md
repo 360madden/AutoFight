@@ -48,6 +48,8 @@ The verified local AutoFight 0.5.7 executable is at C:\work\AutoFight\artifacts\
 
 ## Project navigation
 
+- SESSION_HANDOFF.md — resume point, exact Git/source routing, verification, and next functional milestone
+
 - docs/current-status.md — current factual implementation and next gate
 - docs/automation-platform-master-prompt-v3.md — corrected development directive
 - docs/automation-platform-architecture.md — design and contracts
