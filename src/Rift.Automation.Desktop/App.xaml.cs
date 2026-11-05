@@ -14,16 +14,23 @@ public partial class App : Application
         base.OnStartup(e);
         if (e.Args is ["--help"])
         {
-            Console.WriteLine("AutoFight 0.5.7 - historical VM evidence export UI");
-            Console.WriteLine("Usage: Rift.Automation.Desktop [--vm-feedback <source-pin> | --vm-watch <source-pin> <seconds> | --vm-qualify-feedback <lab> <source-pin> | --vm-status <config> | --vm-preflight <lab> <source-pin> <config> | --vm-pulse <lab> <source-pin> <config> <lease> <arm> <key> <hold-ms> | --clients | --inspect-unit <file> | --replay <file> | --smoke-test | --help]");
+            Console.WriteLine("AutoFight 0.5.7 - standalone VMware diagnostics and supervised legacy tools");
+            Console.WriteLine("Usage: Rift.Automation.Desktop [--owned-telemetry <private-config.local.json> <seconds> | --vm-feedback <source-pin> | --vm-watch <source-pin> <seconds> | --vm-qualify-feedback <lab> <source-pin> | --vm-status <config> | --vm-preflight <lab> <source-pin> <config> | --vm-pulse <lab> <source-pin> <config> <lease> <arm> <key> <hold-ms> | --clients | --inspect-unit <file> | --replay <file> | --smoke-test | --help]");
             Console.WriteLine("VM controls use an existing supervised controller on localhost; no automatic arming.");
             Console.WriteLine("--vm-preflight checks current selected-lab identity/readiness; no input or authorization artifacts.");
             Console.WriteLine("--vm-qualify-feedback checks 480s pinned telemetry with every progress gap strictly below 4500ms; no input or controller contact.");
-            Console.WriteLine("VM feedback reads RR2 latest.json through a pinned reader identity, without touching input.");
+            Console.WriteLine("--owned-telemetry listens for AutoFight GuestReader telemetry with exact private identity binding; no input.");
+            Console.WriteLine("VM feedback reads legacy RR2 latest.json through a pinned reader identity, without touching input.");
             Console.WriteLine("--clients lists local RIFT process metadata as JSON without opening a window.");
             Console.WriteLine("--inspect-unit reads one manual RAC-TSV/1 snapshot file, not live telemetry.");
             Console.WriteLine("No native game-memory sampler, independent guest controller or addon deployment.");
             Shutdown(0);
+            return;
+        }
+
+        if (e.Args is ["--owned-telemetry", string ownedConfig, string ownedSeconds])
+        {
+            Shutdown(await RunOwnedTelemetryAsync(ownedConfig, ownedSeconds));
             return;
         }
 
@@ -139,6 +146,128 @@ public partial class App : Application
         if (e.Args is ["--replay", _]) window.ShowReplay();
         ShutdownMode = ShutdownMode.OnMainWindowClose;
         window.Show();
+    }
+
+    private static async Task<int> RunOwnedTelemetryAsync(string configPath, string durationText)
+    {
+        if (!int.TryParse(durationText, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out int seconds) ||
+            seconds is < 1 or > 120)
+        {
+            Console.Error.WriteLine("Owned telemetry: duration must be 1 through 120 seconds; no listener started.");
+            return 2;
+        }
+
+        try
+        {
+            // Neither private configuration nor token/path leave this process.
+            StandaloneTelemetryHostConfiguration config =
+                StandaloneTelemetryHostConfiguration.Load(configPath);
+            using var session = new StandaloneTelemetryHostSession(
+                config.Binding, config.BindIpv4, config.Port, config.DeliveryToken);
+            using var stop = new CancellationTokenSource();
+            ConsoleCancelEventHandler cancelHandler = (_, e) =>
+            {
+                e.Cancel = true;
+                stop.Cancel();
+            };
+            Console.CancelKeyPress += cancelHandler;
+            try
+            {
+                Task listenerTask = session.RunAsync(stop.Token);
+                var elapsed = Stopwatch.StartNew();
+                var tracker = new VmTelemetryWatchTracker(config.Binding.Lab);
+                VmTelemetryWatchReport? report = null;
+                string? lastPrinted = null;
+                bool interrupted = false;
+                try
+                {
+                    while (elapsed.ElapsedMilliseconds < seconds * 1000L)
+                    {
+                        if (listenerTask.IsCompleted)
+                        {
+                            // An early receiver exit (including bind failure)
+                            // is never evidence of active observation.
+                            await listenerTask;
+                            Console.Error.WriteLine("Owned telemetry: listener_stopped_early");
+                            return 2;
+                        }
+
+                        VmTelemetrySnapshot sample = session.ReadLatest();
+                        report = tracker.Observe(sample, elapsed.ElapsedMilliseconds);
+                        string state = string.Join(":", sample.Status, sample.Reason,
+                            sample.OuterSequence, sample.AddonSequence, report.State);
+                        if (state != lastPrinted)
+                        {
+                            Console.WriteLine(JsonSerializer.Serialize(new
+                            {
+                                mode = "AutoFightOwnedTelemetry",
+                                sample,
+                                watchState = report.State,
+                                watchReason = report.Reason,
+                                canAutomate = false
+                            }));
+                            lastPrinted = state;
+                        }
+
+                        long remaining = seconds * 1000L - elapsed.ElapsedMilliseconds;
+                        if (remaining <= 0) break;
+                        try
+                        {
+                            await Task.Delay((int)Math.Min(500L, remaining), stop.Token);
+                        }
+                        catch (OperationCanceledException) when (stop.IsCancellationRequested)
+                        {
+                            interrupted = true;
+                            break;
+                        }
+                    }
+
+                    // Check the listener at the terminal boundary, not only
+                    // at the beginning of a polling iteration.
+                    if (listenerTask.IsCompleted)
+                    {
+                        await listenerTask;
+                        Console.Error.WriteLine("Owned telemetry: listener_stopped_early");
+                        return 2;
+                    }
+
+                    // A short advancing XYZ watch never grants action authority.
+                    interrupted |= stop.IsCancellationRequested;
+                    bool advanced = !interrupted &&
+                        report is { NewSamples: >= 2, HasCurrentPosition: true,
+                            SessionChanges: 0, Reordered: 0 };
+                    Console.WriteLine(JsonSerializer.Serialize(new
+                    {
+                        mode = "AutoFightOwnedTelemetryWatch",
+                        report,
+                        advancingFreshTelemetry = advanced,
+                        sustainedQualification = false,
+                        canAutomate = false,
+                        interrupted
+                    }));
+                    return advanced ? 0 : 2;
+                }
+                finally
+                {
+                    stop.Cancel();
+                    try { await listenerTask; }
+                    catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
+                }
+            }
+            finally
+            {
+                Console.CancelKeyPress -= cancelHandler;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+            or ArgumentException or InvalidOperationException or JsonException
+            or NotSupportedException or System.Net.Sockets.SocketException
+            or System.Security.SecurityException or OverflowException)
+        {
+            Console.Error.WriteLine("Owned telemetry: invalid_config_or_listener_failure; no input attempted");
+            return 2;
+        }
     }
 
     private async Task WatchVmAsync(string sourcePin, string durationText)
