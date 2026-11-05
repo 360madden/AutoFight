@@ -27,6 +27,33 @@ internal static class StandaloneTelemetrySpecs
     internal static void Run(
         Action<string, Action> test, Action<bool, string> check)
     {
+        test("Standalone host session owns a disarmed, freshness-checked receiver", () =>
+        {
+            var binding = new StandaloneTelemetryBinding(
+                "lab1", GuestIp, "reader-test-01",
+                "0123456789abcdef0123456789abcdef", 1001, 1234567891011L,
+                @"C:\RIFT\rift_x64.exe", new string('a', 64));
+            var session = new StandaloneTelemetryHostSession(
+                binding, "192.168.56.1", 49123, Token);
+            var initial = session.ReadLatest();
+            check(!initial.HasPosition && !initial.CanAutomate &&
+                initial.Lab == "lab1" &&
+                initial.Reason == "delivery_not_received" &&
+                !string.IsNullOrWhiteSpace(session.ReceiverInstanceId),
+                "session never invents initial XYZ or input permission");
+            session.Dispose();
+            session.Dispose();
+            try
+            {
+                session.ReadLatest();
+                check(false, "disposed session must reject reads");
+            }
+            catch (ObjectDisposedException)
+            {
+                check(true, "disposed session rejects reads");
+            }
+        });
+
         test("Standalone telemetry starts unavailable then receives diagnostic XYZ", () =>
         {
             var ingest = NewIngest();
