@@ -87,12 +87,16 @@ public sealed record LiveConfiguration(
 
 public sealed record LiveDeliveryConfiguration(string Endpoint, string Token)
 {
+    // Never let synthesized record formatting disclose a bearer token.
+    public override string ToString() => "LiveDeliveryConfiguration [redacted]";
+
     public void Validate()
     {
         if (!TryValidateEndpoint(Endpoint, out _, out var error))
             throw new InvalidDataException(error);
-        if (string.IsNullOrWhiteSpace(Token) || Token.Length < 32 || Token.Length > 512)
-            throw new InvalidDataException("delivery.token must contain 32 through 512 characters.");
+        if (Token is null || Token.Length is < 32 or > 512 ||
+            Token.Any(c => c < '!' || c > '~'))
+            throw new InvalidDataException("delivery.token must contain 32 through 512 printable ASCII characters.");
     }
 
     public Uri GetValidatedEndpoint()
@@ -115,6 +119,13 @@ public sealed record LiveDeliveryConfiguration(string Endpoint, string Token)
             address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
         {
             error = "delivery.endpoint host must be a literal private IPv4 address.";
+            return false;
+        }
+        // The standalone host listener cannot bind reserved ports or port zero.
+        // An omitted HTTP port resolves to 80 and must also fail validation.
+        if (uri.Port is < 1024 or > 65535)
+        {
+            error = "delivery.endpoint port must be 1024 through 65535.";
             return false;
         }
         var bytes = address.GetAddressBytes();

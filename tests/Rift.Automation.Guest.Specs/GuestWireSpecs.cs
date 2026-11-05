@@ -199,6 +199,55 @@ internal static class GuestWireSpecs
                 "guest can send only to a private observation endpoint");
         });
 
+        test("Guest HTTP delivery ports match standalone host listener requirements", () =>
+        {
+            string token = new('a', 32);
+            foreach (int port in new[] { 1024, 49123, 65535 })
+                new LiveDeliveryConfiguration(
+                    $"http://192.168.56.1:{port}/observation", token).Validate();
+
+            bool missing = Rejects(() => new LiveDeliveryConfiguration(
+                "http://192.168.56.1/observation", token).Validate());
+            bool reserved = Rejects(() => new LiveDeliveryConfiguration(
+                "http://192.168.56.1:80/observation", token).Validate());
+            bool low = Rejects(() => new LiveDeliveryConfiguration(
+                "http://192.168.56.1:1023/observation", token).Validate());
+            bool zero = Rejects(() => new LiveDeliveryConfiguration(
+                "http://192.168.56.1:0/observation", token).Validate());
+            bool high = Rejects(() => new LiveDeliveryConfiguration(
+                "http://192.168.56.1:65536/observation", token).Validate());
+            check(missing && reserved && low && zero && high,
+                "guest rejects default HTTP, reserved, zero, and invalid ports before scanning");
+        });
+
+        test("Guest HTTP delivery token matches host ASCII rules and never formats visibly", () =>
+        {
+            const string endpoint = "http://192.168.56.1:49123/observation";
+            string secret = "private-guest-delivery-token-0123456789";
+            var config = new LiveDeliveryConfiguration(endpoint, secret);
+            config.Validate();
+            new LiveDeliveryConfiguration(endpoint, new string('!', 32)).Validate();
+            new LiveDeliveryConfiguration(endpoint, new string('~', 512)).Validate();
+
+            bool shortToken = Rejects(() =>
+                new LiveDeliveryConfiguration(endpoint, new string('a', 31)).Validate());
+            bool longToken = Rejects(() =>
+                new LiveDeliveryConfiguration(endpoint, new string('a', 513)).Validate());
+            bool whitespace = Rejects(() =>
+                new LiveDeliveryConfiguration(endpoint, new string(' ', 32)).Validate());
+            bool control = Rejects(() =>
+                new LiveDeliveryConfiguration(endpoint, new string('\t', 32)).Validate());
+            bool nonAscii = Rejects(() =>
+                new LiveDeliveryConfiguration(endpoint, new string('é', 32)).Validate());
+            string formatted = config.ToString();
+            string nestedFormatted = (LiveConfiguration.Defaults with { Delivery = config }).ToString();
+            check(shortToken && longToken && whitespace && control && nonAscii &&
+                formatted.Contains("[redacted]", StringComparison.Ordinal) &&
+                !formatted.Contains(secret, StringComparison.Ordinal) &&
+                !nestedFormatted.Contains(secret, StringComparison.Ordinal),
+                "all printable ASCII boundaries match host and record ToString cannot leak token");
+        });
+
         test("Guest default config remains bounded and AutoFight-owned", () =>
         {
             var config = LiveConfiguration.Defaults;
