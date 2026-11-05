@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="AutoFight - VMware 0.5.7"
         Width="940" Height="740" MinWidth="720" MinHeight="560"
-        Background="#101827" Foreground="#E6EDF7">
+        Background="#101827" Foreground="#E6EDF7" Closed="OwnedTelemetryWindowClosed">
   <TabControl x:Name="ObserverTabs" Margin="12" Background="#101827" Foreground="#E6EDF7">
     <TabItem x:Name="VmTab" Header="VMware RIFT labs">
       <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -24,6 +24,22 @@
                   Margin="0,12,0,0" HorizontalAlignment="Left" />
           <TextBlock x:Name="VmLab1Status" Text="Lab 1: not checked" Margin="0,9,0,0" TextWrapping="Wrap"/>
           <TextBlock x:Name="VmLab2Status" Text="Lab 2: not checked" Margin="0,5,0,0" TextWrapping="Wrap"/>
+           <Border Background="#183C3C" CornerRadius="8" Padding="14" Margin="0,16,0,0">
+             <StackPanel>
+               <TextBlock Text="AUTOFIGHT STANDALONE TELEMETRY" FontSize="17" FontWeight="SemiBold"/>
+               <TextBlock TextWrapping="Wrap" Foreground="#B9D5CA" Text="One reviewed VM lab. Read-only AutoFight receiver; no RR2 runtime, game input, or control authority."/>
+               <TextBlock Text="Private host receiver config path (blank until reviewed)" Margin="0,8,0,0"/>
+               <TextBox x:Name="OwnedTelemetryConfigPath" Background="#101827" Foreground="#E6EDF7"/>
+               <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                 <Button x:Name="OwnedTelemetryStartButton" Content="Start receiver" Click="OwnedTelemetryStartClicked"/>
+                 <Button x:Name="OwnedTelemetryStopButton" Content="Stop receiver" Click="OwnedTelemetryStopClicked" IsEnabled="False" Margin="12,0,0,0"/>
+               </StackPanel>
+               <TextBlock x:Name="OwnedTelemetryStatusText" Text="Stopped. No guest observation verified." Margin="0,10,0,0" TextWrapping="Wrap"/>
+               <TextBlock x:Name="OwnedTelemetryPositionText" Text="XYZ: unavailable" FontSize="18" FontFamily="Consolas" Margin="0,6,0,0"/>
+               <TextBlock x:Name="OwnedTelemetryAgeText" Text="Receipt age: unavailable" Margin="0,6,0,0"/>
+               <TextBlock x:Name="OwnedTelemetrySequenceText" Text="Sequence: unavailable | Input authority: none" TextWrapping="Wrap" Margin="0,6,0,0"/>
+             </StackPanel>
+           </Border>
           <Border Background="#1B293E" CornerRadius="8" Padding="14" Margin="0,16,0,0">
             <StackPanel>
               <TextBlock Text="PLAYER TELEMETRY" FontWeight="SemiBold"/>

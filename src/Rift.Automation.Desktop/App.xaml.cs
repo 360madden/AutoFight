@@ -128,6 +128,11 @@ public partial class App : Application
                 bool vmPassed = window.RunVmSmokeCheck();
                 Console.WriteLine(vmPassed ? "PASS: VMware controller controls" : "FAIL: VMware controller controls");
                 passed &= vmPassed;
+                bool ownedTelemetryUiPassed = window.RunOwnedTelemetryUiSmokeCheck();
+                Console.WriteLine(ownedTelemetryUiPassed
+                    ? "PASS: AutoFight-owned telemetry panel and fresh/stale XYZ presentation"
+                    : "FAIL: AutoFight-owned telemetry panel");
+                passed &= ownedTelemetryUiPassed;
                 bool qualificationUiPassed = await Rift.Automation.Desktop.MainWindow.RunVmQualificationSmokeCheckAsync();
                 Console.WriteLine(qualificationUiPassed
                     ? "PASS: VM sustained qualification UI, operation isolation, stop and close"
