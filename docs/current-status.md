@@ -8,7 +8,7 @@ Updated November 5, 2026. **Current source of truth: C:\work\AutoFight, main bra
 - Independent Windows assembly for VMware Lab 1/Lab 2 controller diagnostics, pinned legacy RR2 telemetry read/watch, bound read-only preflight and strictly supervised legacy one-pulse path. Desktop Refresh/Telemetry now share VM operation cancellation/exclusion.
 - Fixed 480-second/500-ms source-pinned telemetry qualification with strict advancing-feedback gaps below 4,500 ms. The UI displays state and supports redacted JSON export of a completed/failed/cancelled report when the runner produces one.
 - The exact-source collector TSV parser is copied locally into the Windows assembly. Builds no longer compile from C:\work\Rift API.
-- Seven required application/test projects, including an AutoFight-owned guest reader executable and 13 deterministic guest wire/scanner/host-contract specs. The six-file AutoFight Lua addon source is bundled in this repo. The solution has no RR2 ProjectReferences and compiles without another checkout; runtime lab deployment has not been performed.
+- Seven required application/test projects, including an AutoFight-owned guest reader executable and 15 deterministic guest wire/scanner/host-contract specs. The six-file AutoFight Lua addon source is bundled in this repo. The solution has no RR2 ProjectReferences and compiles without another checkout; runtime lab deployment has not been performed.
 - AutoFight-owned in-process authenticated telemetry ingest/HTTP listener and a disposable, exact-identity host session; `--owned-telemetry <private-config.local.json> <seconds>` now runs a read-only, 1–120-second CLI XYZ watch independent of RR2 services. An isolated WPF panel supports explicitly starting/stopping the same AutoFight-owned listener and displays valid XYZ, age, sequence, and source state; it clears stale XYZ. The bounded synthetic keyboard executor is not a deployed guest controller.
 
 ## Acceptance in the new repository
@@ -17,17 +17,17 @@ Updated November 5, 2026. **Current source of truth: C:\work\AutoFight, main bra
 | --- | --- |
 | dotnet Release solution build | Exit 0; 0 errors/warnings |
 | Core synthetic regression suite | 149 passed, 0 failed |
-| Windows/VM synthetic, source identity, receiver socket and private config suite | 149 passed, 0 failed (November 5) |
-| Guest RR2A1/RR2L1 decoder, candidate, config and host JSON roundtrip | 13 passed, 0 failed |
+| Windows/VM synthetic, source identity, receiver socket and private config suite | 150 passed, 0 failed (November 5) |
+| Guest RR2A1/RR2L1 decoder, candidate, config and host JSON roundtrip | 15 passed, 0 failed |
 | Nonshown WPF smoke | All six categories pass, including standalone receiver panel |
 
 The AutoFight-built 0.5.7 self-contained x64 executable passed direct help and all five nonshown WPF smoke categories. Its path, SHA-256, size and job IDs are in release-autofight-0.5.7-2026-10-31.md. This is not visible UI or clean-machine acceptance.
 
-Current milestone evidence and port provenance are recorded in M1-standalone-guest-port-2026-10-31.md. Migration-era evidence is recorded in MIGRATION-2026-10-31.md. Earlier commits and tests in automation-platform-status.md were actually performed from C:\work\Rift API, not AutoFight.
+A November 5, 2026 synthetic integration test now sends HTTP observations through two independent AutoFight-owned in-process socket listeners, verifies exact XYZ, wrong-token and wrong-game rejection, unavailable/stale demotion and cancellation (commit 09ad023). This is not live RIFT evidence. Current port provenance is recorded in M1-standalone-guest-port-2026-10-31.md. Migration-era evidence is recorded in MIGRATION-2026-10-31.md. Earlier commits and tests in automation-platform-status.md were actually performed from C:\work\Rift API, not AutoFight.
 
 ## Unverified or blocked
 
-- Authenticated read-only checks on November 5 found both VMware guests running RIFT; they did not verify a deployed AutoFight-owned GuestReader. Historical RR2 source pins returned reader_not_running on October 31. No fresh live AutoFight XYZ or eight-minute pass is claimed. The new guest reader has not been verified installed or started in either VM.
+- Authenticated read-only checks on November 5 found both VMware guests running RIFT at guest IPs 192.168.56.128 (Lab 1) and 192.168.56.129 (Lab 2), with one RIFT process each. This is time-bound inventory, not a complete source pin: the exact executable path, creation ticks and SHA-256 were unavailable. The checks did not verify a deployed AutoFight-owned GuestReader. Historical RR2 source pins returned reader_not_running on October 31. No fresh live AutoFight XYZ or eight-minute pass is claimed. The new guest reader has not been verified installed or started in either VM.
 - No actual RIFT movement/action caused and verified by AutoFight has been demonstrated. The controller adapter is an implementation, not proof of in-game behavior.
 - The owned guest native memory scanner now compiles but has not been live-validated. Automatic target/combat rotation, spellcasting, continuous measured movement, collision/LOS pathfinding and three-client combat remain future work.
 - Visible desktop click-through and clean-machine installation need separate acceptance.
