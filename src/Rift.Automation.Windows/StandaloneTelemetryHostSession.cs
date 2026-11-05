@@ -28,6 +28,34 @@ public sealed class StandaloneTelemetryHostSession : IDisposable
             _time);
     }
 
+    // Testing-only socket seam. The HTTP listener validates a real loopback
+    // peer; the authenticated ingest receives the fixture's pinned guest
+    // address because loopback traffic cannot originate from a VMware guest.
+    // Production construction always passes the actual socket peer.
+    internal static StandaloneTelemetryHostSession CreateLoopbackForTests(
+        StandaloneTelemetryBinding binding,
+        string deliveryToken,
+        TimeProvider? timeProvider = null) =>
+        new(binding, deliveryToken, timeProvider);
+
+    internal int BoundPortForTests => _listener.BoundPort;
+
+    private StandaloneTelemetryHostSession(
+        StandaloneTelemetryBinding binding,
+        string deliveryToken,
+        TimeProvider? timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+        _time = timeProvider ?? TimeProvider.System;
+        _ingest = new StandaloneTelemetryIngest(binding, deliveryToken);
+        _listener = StandaloneTelemetryHttpListener.CreateLoopbackForTests(
+            deliveryToken,
+            (body, token, _, receivedAt) =>
+                _ingest.AcceptDelivery(
+                    body, token, binding.GuestIpv4, receivedAt).Accepted,
+            _time);
+    }
+
     public string ReceiverInstanceId => _ingest.ReceiverInstanceId;
 
     /// <summary>

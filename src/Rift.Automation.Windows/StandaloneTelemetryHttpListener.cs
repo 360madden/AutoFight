@@ -58,9 +58,10 @@ public sealed class StandaloneTelemetryHttpListener : IDisposable
     // The only nonprivate-host bind seam is internal and used by offline tests.
     internal static StandaloneTelemetryHttpListener CreateLoopbackForTests(
         string token,
-        Func<ReadOnlyMemory<byte>, string, string, DateTimeOffset, bool> accept) =>
+        Func<ReadOnlyMemory<byte>, string, string, DateTimeOffset, bool> accept,
+        TimeProvider? timeProvider = null) =>
         new("127.0.0.1", 0, "127.0.0.1", token, accept,
-            timeProvider: null, allowLoopback: true);
+            timeProvider, allowLoopback: true);
 
     internal int BoundPort => (_listener.LocalEndpoint as IPEndPoint)?.Port ?? 0;
 
