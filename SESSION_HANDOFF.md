@@ -1,5 +1,7 @@
 # AutoFight YEA — SESSION HANDOFF
 
+> **November 6, 2026 current handoff:** [Detailed two-lab AutoFight handoff](docs/HANDOFF-AUTOFIGHT-VMWARE-LABS-2026-11-06.md). Both VMware lab guest-to-host TCP 48761 paths now pass under an exact VMnet8 firewall rule, and both labs have saved Codex full-access/no-approval defaults. Lab1 AutoFight files are installed but no in-game addon load, current XYZ, or movement has been proved. The October 31 migration details below remain historical; recheck Git HEAD and live VM/game identity.
+
 **Created:** October 31, 2026 (America/New_York)
 **Status:** Repository separation complete; live bidirectional gameplay control remains unverified.
 **Authoritative working directory:** **C:\work\AutoFight**

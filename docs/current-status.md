@@ -1,5 +1,7 @@
 # AutoFight current status
 
+> **November 6, 2026 update:** [Detailed Lab1/Lab2 handoff](HANDOFF-AUTOFIGHT-VMWARE-LABS-2026-11-06.md) supersedes older dated network, permissions and UI-readiness notes below. The exact scoped host firewall rule now permits verified TCP 48761 from both labs; both Codex guest user defaults are saved as full access/no approval. Lab1 installed addon/reader bytes do not yet prove a loaded in-game addon or live XYZ; Lab2 addon contents remain unverified. Fresh Lab1 screenshot review denied the obscured toolbar reload, and no movement has been measured. The remaining November 5 status is historical.
+
 Updated November 5, 2026. **Current source of truth: C:\work\AutoFight, main branch.** App development version: 0.5.7 from src/Directory.Build.props.
 
 ## What works now
