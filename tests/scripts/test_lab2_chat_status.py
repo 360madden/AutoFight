@@ -1,4 +1,4 @@
-"""Offline Lab2 status-only VNC console tests; NEVER connect to a VM or send input."""
+"""Offline Lab2 reviewed status/open-chat tests; NEVER connect to a VM."""
 from __future__ import annotations
 
 from contextlib import nullcontext
@@ -84,34 +84,39 @@ class Lab2StatusSpecs(unittest.TestCase):
         path.write_bytes(b"mock-lab2-screen")
         return (1211, 757)
 
-    def capture(self):
+    def capture(self, operation=None):
         with status.lab2_scope():
-            return base.capture(self.output, dict(status.STATUS_OPERATION))
+            return base.capture(self.output, dict(operation or status.STATUS_OPERATION))
 
     def approve(self, plan):
         review_path = self.output / "review.json"
         review = json.loads(review_path.read_text())
+        opening = plan["operation"] == status.OPEN_CHAT_OPERATION
         review.update({
             "reviewedAtUtc": plan["capturedAtUtc"],
             "decision": "approved", "gameForeground": True,
-            "textEntryClosed": False, "chatEntryOpen": True,
-            "chatEntryEmpty": True, "chatEntryFocused": True,
+            "textEntryClosed": opening, "chatEntryOpen": not opening,
+            "chatEntryEmpty": not opening, "chatEntryFocused": not opening,
             "panelClosed": True, "otherControllerIdle": True,
             "queueIdle": True, "reviewer": "root-agent",
-            "note": "current screenshot: Lab2, empty focused RIFT chat",
+            "note": ("current screenshot: Lab2, RIFT foreground, no text entry" if opening
+                     else "current screenshot: Lab2, empty focused RIFT chat"),
         })
         review_path.write_text(json.dumps(review))
         return review
 
-    def test_allowlist_is_one_exact_status_operation(self):
-        self.assertEqual(status.validate_status_only(dict(status.STATUS_OPERATION)),
+    def test_allowlist_has_only_exact_status_and_open_chat_operations(self):
+        self.assertEqual(status.validate_lab2_operation(dict(status.STATUS_OPERATION)),
                          status.STATUS_OPERATION)
+        self.assertEqual(status.validate_lab2_operation(dict(status.OPEN_CHAT_OPERATION)),
+                         status.OPEN_CHAT_OPERATION)
         for candidate in (
             {"type": "command", "command": "/afguide status "},
             {"type": "command", "command": "/afguide bind lab2 1234"},
             {"type": "command", "command": "/reloadui"},
             {"type": "command", "command": "/afbind " + "a" * 32},
-            {"type": "ui-step", "step": "open-chat"},
+            {"type": "ui-step", "step": "open-chat", "x": 1},
+            {"type": "ui-step", "step": "open-chat "},
             {"type": "ui-step", "step": "focus-titlebar", "x": 120, "y": 8},
             {"type": "ui-step", "step": "reload-toolbar", "x": 1125, "y": 553},
             {"type": "command", "command": "/afguide status", "extra": True},
@@ -119,7 +124,7 @@ class Lab2StatusSpecs(unittest.TestCase):
             None,
         ):
             with self.subTest(candidate=candidate), self.assertRaises(base.Blocked):
-                status.validate_status_only(candidate)
+                status.validate_lab2_operation(candidate)
 
     def test_key_mapping_uses_vnc_space_not_bare_space(self):
         self.assertIn("space", status.STATUS_KEYS)
@@ -139,7 +144,7 @@ class Lab2StatusSpecs(unittest.TestCase):
                 self.assertEqual(lab.DEFAULT_GAME_IDENTITY, self.pin)
                 self.assertEqual(lab.GUEST_PASSWORD_TARGET,
                                  lab.LEGACY_GUEST_TARGET)
-                self.assertIs(base.validate_operation, status.validate_status_only)
+                self.assertIs(base.validate_operation, status.validate_lab2_operation)
                 raise RuntimeError("test-stop")
         self.assertEqual((lab.VMX, lab.VM_CONSOLE_PORT, lab.VM_PASSWORD_TARGET,
                           lab.GUEST_PASSWORD_TARGET, lab.LEGACY_GUEST_TARGET,
@@ -173,6 +178,72 @@ class Lab2StatusSpecs(unittest.TestCase):
         self.assertFalse(self.client.keys)
         self.assertFalse(self.client.mouse)
         self.assertTrue(self.client.disconnected)
+
+    def test_open_chat_capture_is_denied_and_input_free(self):
+        plan = self.capture(status.OPEN_CHAT_OPERATION)
+        self.assertEqual(plan["operation"], status.OPEN_CHAT_OPERATION)
+        self.assertEqual(plan["vmIdentity"][-1], 5962)
+        self.assertEqual(plan["gameIdentity"]["lab"], "lab2")
+        receipt = json.loads((self.output / "review.json").read_text())
+        self.assertEqual(receipt["decision"], "denied")
+        self.assertFalse(self.client.keys)
+        self.assertFalse(self.client.mouse)
+        self.assertTrue(self.client.disconnected)
+
+    def test_open_chat_requires_native_entry_closed_and_panels_closed(self):
+        plan = self.capture(status.OPEN_CHAT_OPERATION)
+        approved = self.approve(plan)
+        for flag in ("textEntryClosed", "panelClosed", "gameForeground",
+                     "otherControllerIdle", "queueIdle"):
+            receipt = dict(approved, **{flag: False})
+            (self.output / "review.json").write_text(json.dumps(receipt))
+            with status.lab2_scope():
+                with self.assertRaises(base.Blocked):
+                    base.inspect(self.output)
+            self.assertFalse(self.client.keys)
+        for flag in ("chatEntryOpen", "chatEntryEmpty", "chatEntryFocused"):
+            receipt = dict(approved, **{flag: True})
+            (self.output / "review.json").write_text(json.dumps(receipt))
+            with status.lab2_scope():
+                with self.assertRaisesRegex(base.Blocked, "review-ui-mismatch"):
+                    base.inspect(self.output)
+            self.assertFalse(self.client.keys)
+
+    def test_open_chat_one_enter_only_with_release_and_after_screen(self):
+        plan = self.capture(status.OPEN_CHAT_OPERATION)
+        self.approve(plan)
+        with mock.patch.object(base.time, "sleep", return_value=None), status.lab2_scope():
+            report = base.execute(self.output)
+        self.assertEqual(report["status"], "completed")
+        self.assertEqual(self.client.keys, ["enter"])
+        self.assertEqual(self.client.ups, list(status.OPEN_CHAT_RELEASE_KEYS))
+        self.assertFalse(self.client.mouse)
+        self.assertTrue((self.output / "after-screen.png").exists())
+        self.assertTrue(self.client.disconnected)
+        with status.lab2_scope():
+            with self.assertRaisesRegex(base.Blocked, "operation-already-attempted"):
+                base.execute(self.output)
+        self.assertEqual(self.client.keys, ["enter"])
+
+    def test_open_chat_cli_only_allowed_on_capture(self):
+        for mode in ("--review", "--execute"):
+            with self.subTest(mode=mode), mock.patch("builtins.print") as printed:
+                code = status.main([mode, "--open-chat", "--output", str(self.output)])
+                self.assertEqual(code, 2)
+                self.assertIn("open-chat-only-allowed-for-capture",
+                              printed.call_args.args[0])
+        self.assertFalse(self.client.keys)
+        self.assertFalse(self.client.mouse)
+
+    def test_open_chat_cli_capture_has_no_input(self):
+        with mock.patch("builtins.print"):
+            code = status.main(["--capture", "--open-chat", "--output",
+                                str(self.output)])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads((self.output / "plan.json").read_text())
+                         ["operation"], status.OPEN_CHAT_OPERATION)
+        self.assertFalse(self.client.keys)
+        self.assertFalse(self.client.mouse)
 
     def test_denied_review_blocks_before_input(self):
         self.capture()
