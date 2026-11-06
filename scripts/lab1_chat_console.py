@@ -1,6 +1,7 @@
 """AutoFight-only reviewed Lab1 VNC chat console.
 
-Supports only open-chat, fixed titlebar focus, /reloadui, and /afbind 32 lowercase hex.
+Supports only open-chat, fixed titlebar focus, reviewed secure Reload UI
+button, /reloadui, and /afbind followed by 32 lowercase hex.
 One screenshot review and one command per explicit invocation; no automatic input.
 No RiftReader2 imports, processes, modules, services, or runtime dependencies.
 """
@@ -53,7 +54,18 @@ def focus_titlebar_operation() -> dict:
     return {"type": "ui-step", "step": "focus-titlebar", "x": 120, "y": 8}
 
 
+def reload_toolbar_operation() -> dict:
+    # Fixed for the independently reviewed Lab1 1211x757 screenshot showing
+    # RRECollector v0.4.10 and the 81x28 restricted Reload UI surface.
+    # This is NOT a general screen-coordinate click facility.
+    return {"type": "ui-step", "step": "reload-toolbar", "x": 1125, "y": 553,
+            "screenWidth": 1211, "screenHeight": 757,
+            "visibleAddonVersion": "0.4.10"}
+
+
 def validate_operation(value: object) -> dict:
+    if value == reload_toolbar_operation():
+        return reload_toolbar_operation()
     if value == focus_titlebar_operation():
         return focus_titlebar_operation()
     if value == open_chat_operation():
@@ -325,6 +337,8 @@ def capture(output: Path, operation: dict) -> dict:
                     type(size[0]) is not int or type(size[1]) is not int or
                     size[0] <= 120 or size[1] <= 8):
                 raise Blocked("titlebar-target-outside-screen")
+            if operation == reload_toolbar_operation() and size != (1211, 757):
+                raise Blocked("reload-toolbar-screen-size-changed")
         finally:
             if client is not None:
                 try:
@@ -349,6 +363,11 @@ def capture(output: Path, operation: dict) -> dict:
                 "reviewer": "", "note": ""}
     if operation == focus_titlebar_operation():
         template.update({"riftWindowVisible": False, "titlebarTargetReviewed": False})
+    if operation == reload_toolbar_operation():
+        template.update({"riftWindowVisible": False, "reloadButtonVisible": False,
+                         "reloadButtonEnabled": False,
+                         "reloadButtonCenterReviewed": False,
+                         "visibleAddonVersionReviewed": ""})
     write_new(directory / "review.json", template)
     return plan
 
@@ -381,8 +400,13 @@ def validate_review(plan: dict, receipt: dict, operation: dict,
                 "chatEntryOpen", "chatEntryEmpty", "chatEntryFocused", "panelClosed",
                 "otherControllerIdle", "queueIdle", "reviewer", "note"}
     focus = operation == focus_titlebar_operation()
+    reload_toolbar = operation == reload_toolbar_operation()
     if focus:
         required.update({"riftWindowVisible", "titlebarTargetReviewed"})
+    if reload_toolbar:
+        required.update({"riftWindowVisible", "reloadButtonVisible",
+                         "reloadButtonEnabled", "reloadButtonCenterReviewed",
+                         "visibleAddonVersionReviewed"})
     if not isinstance(receipt, dict) or set(receipt) != required or receipt["schemaVersion"] != 1:
         raise Blocked("review-invalid")
     if any(receipt[name] != plan[name] for name in ("captureId", "screenSha256", "planSha256")):
@@ -392,12 +416,18 @@ def validate_review(plan: dict, receipt: dict, operation: dict,
         (focus and (type(receipt["gameForeground"]) is not bool or
                     receipt["riftWindowVisible"] is not True or
                     receipt["titlebarTargetReviewed"] is not True))
+        or (reload_toolbar and (receipt["riftWindowVisible"] is not True or
+                                receipt["reloadButtonVisible"] is not True or
+                                receipt["reloadButtonEnabled"] is not True or
+                                receipt["reloadButtonCenterReviewed"] is not True or
+                                receipt["visibleAddonVersionReviewed"] != "0.4.10"))
         or receipt["panelClosed"] is not True
         or receipt["otherControllerIdle"] is not True or receipt["queueIdle"] is not True
         or receipt["reviewer"] != "root-agent" or type(receipt["note"]) is not str
         or not 1 <= len(receipt["note"]) <= 256):
         raise Blocked("review-not-approved")
-    if operation in (open_chat_operation(), focus_titlebar_operation()):
+    if operation in (open_chat_operation(), focus_titlebar_operation(),
+                     reload_toolbar_operation()):
         state_ok = (receipt["textEntryClosed"] is True and receipt["chatEntryOpen"] is False
                     and receipt["chatEntryEmpty"] is False
                     and receipt["chatEntryFocused"] is False)
@@ -429,6 +459,10 @@ def send_input(client, operation):
         client.mouseMove(120, 8)
         client.mousePress(1)
         client.mouseUp(1)
+    elif operation == reload_toolbar_operation():
+        client.mouseMove(1125, 553)
+        client.mousePress(1)
+        client.mouseUp(1)
     elif operation == open_chat_operation():
         client.keyPress("enter")
     else:
@@ -448,7 +482,7 @@ def release_keys(client, operation) -> bool:
     if operation["type"] == "command":
         keys.update("minus" if c == "-" else c for c in operation["command"])
     okay = True
-    if operation == focus_titlebar_operation():
+    if operation in (focus_titlebar_operation(), reload_toolbar_operation()):
         try:
             client.mouseUp(1)
         except BaseException:
@@ -532,19 +566,23 @@ def main(argv=None):
     choices.add_argument("--command")
     choices.add_argument("--open-chat", action="store_true")
     choices.add_argument("--focus-titlebar", action="store_true")
+    choices.add_argument("--reload-toolbar", action="store_true")
     args = parser.parse_args(argv)
     try:
         if args.capture:
-            if sum((args.command is not None, args.open_chat, args.focus_titlebar)) != 1:
+            if sum((args.command is not None, args.open_chat, args.focus_titlebar,
+                    args.reload_toolbar)) != 1:
                 raise Blocked("exactly-one-operation-required")
             op = (operation_for_command(args.command) if args.command is not None
                   else open_chat_operation() if args.open_chat
-                  else focus_titlebar_operation())
+                  else focus_titlebar_operation() if args.focus_titlebar
+                  else reload_toolbar_operation())
             result = capture(args.output, op)
             print(json.dumps({"status": "captured", "captureId": result["captureId"],
                               "output": str(args.output)}))
         else:
-            if args.command is not None or args.open_chat or args.focus_titlebar:
+            if (args.command is not None or args.open_chat or args.focus_titlebar
+                    or args.reload_toolbar):
                 raise Blocked("operation-only-allowed-for-capture")
             if args.review:
                 plan, _, _ = inspect(args.output)

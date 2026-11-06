@@ -65,7 +65,7 @@ class ChatSpecs(unittest.TestCase):
             chat, ARTIFACTS=self.artifacts,
             control_mutex=lambda: nullcontext(),
             connect_vnc=lambda: self.client,
-            screenshot=lambda client, path: (path.write_bytes(b"fake-screen"), (1920, 1080))[1],
+            screenshot=lambda client, path: (path.write_bytes(b"fake-screen"), (1211, 757))[1],
             require_game=lambda vm, game: None,
         )
         self.stack.start()
@@ -109,6 +109,64 @@ class ChatSpecs(unittest.TestCase):
                       "/rr2guide status", "/afbind " + "g" * 32, "open-chat"):
             with self.subTest(value=value), self.assertRaises(chat.Blocked):
                 chat.operation_for_command(value)
+
+    def test_reload_toolbar_only_fixed_reviewed_button(self):
+        expected = {"type": "ui-step", "step": "reload-toolbar", "x": 1125,
+                    "y": 553, "screenWidth": 1211, "screenHeight": 757,
+                    "visibleAddonVersion": "0.4.10"}
+        self.assertEqual(chat.reload_toolbar_operation(), expected)
+        self.assertEqual(chat.validate_operation(expected), expected)
+        for changed in (dict(expected, x=1126), dict(expected, y=552),
+                        dict(expected, screenWidth=1920),
+                        dict(expected, visibleAddonVersion="0.4.11"),
+                        {key: value for key, value in expected.items() if key != "x"}):
+            with self.subTest(changed=changed), self.assertRaises(chat.Blocked):
+                chat.validate_operation(changed)
+
+    def test_reload_toolbar_requires_all_visual_assertions(self):
+        plan = self.plan(chat.reload_toolbar_operation())
+        receipt = self.approve(plan, open_chat=True)
+        with self.assertRaisesRegex(chat.Blocked, "review-not-approved"):
+            chat.inspect(self.output)
+        self.assertFalse(self.client.mouse)
+        receipt.update({"riftWindowVisible": True, "reloadButtonVisible": True,
+                        "reloadButtonEnabled": True,
+                        "reloadButtonCenterReviewed": True,
+                        "visibleAddonVersionReviewed": "0.4.10"})
+        (self.output / "review.json").write_text(json.dumps(receipt))
+        with mock.patch.object(chat.time, "sleep", return_value=None):
+            report = chat.execute(self.output)
+        self.assertEqual(report["status"], "completed")
+        self.assertEqual(self.client.keys, [])
+        self.assertEqual(self.client.mouse,
+                         [("move", 1125, 553), ("press", 1), ("up", 1), ("up", 1)])
+        self.assertTrue(report["releaseSucceeded"])
+        self.assertTrue((self.output / "after-screen.png").exists())
+
+    def test_reload_toolbar_screen_geometry_is_exact(self):
+        def changed_geometry(client, path):
+            path.write_bytes(b"screen")
+            return (1212, 757)
+        with mock.patch.object(chat, "screenshot", side_effect=changed_geometry):
+            with self.assertRaisesRegex(chat.Blocked, "reload-toolbar-screen-size-changed"):
+                self.plan(chat.reload_toolbar_operation())
+        self.assertFalse((self.output / "plan.json").exists())
+        self.assertFalse(self.client.keys)
+        self.assertFalse(self.client.mouse)
+
+    def test_reload_toolbar_wrong_label_version_blocks_before_input(self):
+        plan = self.plan(chat.reload_toolbar_operation())
+        receipt = self.approve(plan, open_chat=True)
+        receipt.update({"riftWindowVisible": True, "reloadButtonVisible": True,
+                        "reloadButtonEnabled": True,
+                        "reloadButtonCenterReviewed": True,
+                        "visibleAddonVersionReviewed": "0.4.11"})
+        (self.output / "review.json").write_text(json.dumps(receipt))
+        with self.assertRaisesRegex(chat.Blocked, "review-not-approved"):
+            chat.execute(self.output)
+        self.assertFalse(self.client.keys)
+        self.assertFalse(self.client.mouse)
+        self.assertFalse((self.output / "execution.json").exists())
 
     def test_focus_titlebar_only_fixed_coordinate(self):
         self.assertEqual(chat.focus_titlebar_operation(),
