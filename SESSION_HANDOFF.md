@@ -1,5 +1,7 @@
 # AutoFight YEA — SESSION HANDOFF
 
+> **November 6, 2026 newest first-XYZ handoff:** [Lab 2 Reader → addon binding → first XYZ](docs/HANDOFF-AUTOFIGHT-LAB2-FIRST-XYZ-2026-11-06.md) is the current machine-readable continuation packet. It records verified guest-to-host Reader transport but **zero matching addon frames/XYZ**, the reviewed one-shot private binding helper, AutoFight-owned VNC environment, LuaPad Preview 20 in Lab 2, pending native-chat focus and exact next actions. This supersedes older milestones below where they disagree; verify current Git HEAD and live process identity before any operation.
+
 > **November 6, 2026 current handoff:** [Detailed two-lab AutoFight handoff](docs/HANDOFF-AUTOFIGHT-VMWARE-LABS-2026-11-06.md). Both VMware lab guest-to-host TCP 48761 paths now pass under an exact VMnet8 firewall rule, and both labs have saved Codex full-access/no-approval defaults. Lab1 AutoFight files are installed but no in-game addon load, current XYZ, or movement has been proved. The October 31 migration details below remain historical; recheck Git HEAD and live VM/game identity.
 
 **Created:** October 31, 2026 (America/New_York)
