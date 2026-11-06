@@ -15,15 +15,16 @@ public partial class App : Application
         if (e.Args is ["--help"])
         {
             Console.WriteLine("AutoFight 0.5.7 - standalone VMware diagnostics and supervised legacy tools");
-            Console.WriteLine("Usage: Rift.Automation.Desktop [--owned-telemetry <private-config.local.json> <seconds> | --vm-feedback <source-pin> | --vm-watch <source-pin> <seconds> | --vm-qualify-feedback <lab> <source-pin> | --vm-status <config> | --vm-preflight <lab> <source-pin> <config> | --vm-pulse <lab> <source-pin> <config> <lease> <arm> <key> <hold-ms> | --clients | --inspect-unit <file> | --replay <file> | --smoke-test | --help]");
+            Console.WriteLine("Usage: Rift.Automation.Desktop [--owned-telemetry <private-config.local.json> <seconds> | --owned-qualify-telemetry <private-config.local.json> | --vm-feedback <source-pin> | --vm-watch <source-pin> <seconds> | --vm-qualify-feedback <lab> <source-pin> | --vm-status <config> | --vm-preflight <lab> <source-pin> <config> | --vm-pulse <lab> <source-pin> <config> <lease> <arm> <key> <hold-ms> | --clients | --inspect-unit <file> | --replay <file> | --smoke-test | --help]");
             Console.WriteLine("VM controls use an existing supervised controller on localhost; no automatic arming.");
             Console.WriteLine("--vm-preflight checks current selected-lab identity/readiness; no input or authorization artifacts.");
             Console.WriteLine("--vm-qualify-feedback checks 480s pinned telemetry with every progress gap strictly below 4500ms; no input or controller contact.");
             Console.WriteLine("--owned-telemetry listens for AutoFight GuestReader telemetry with exact private identity binding; no input.");
+            Console.WriteLine("--owned-qualify-telemetry waits up to 30s for fresh owned XYZ, then measures a strict 480s window; no input.");
             Console.WriteLine("VM feedback reads legacy RR2 latest.json through a pinned reader identity, without touching input.");
             Console.WriteLine("--clients lists local RIFT process metadata as JSON without opening a window.");
             Console.WriteLine("--inspect-unit reads one manual RAC-TSV/1 snapshot file, not live telemetry.");
-            Console.WriteLine("No native game-memory sampler, independent guest controller or addon deployment.");
+            Console.WriteLine("Native game scanning, movement, and live feedback require separate current-build acceptance; these diagnostics perform no input.");
             Shutdown(0);
             return;
         }
@@ -31,6 +32,12 @@ public partial class App : Application
         if (e.Args is ["--owned-telemetry", string ownedConfig, string ownedSeconds])
         {
             Shutdown(await RunOwnedTelemetryAsync(ownedConfig, ownedSeconds));
+            return;
+        }
+
+        if (e.Args is ["--owned-qualify-telemetry", string ownedQualificationConfig])
+        {
+            Shutdown(await RunOwnedQualificationAsync(ownedQualificationConfig));
             return;
         }
 
@@ -271,6 +278,136 @@ public partial class App : Application
             or System.Security.SecurityException or OverflowException)
         {
             Console.Error.WriteLine("Owned telemetry: invalid_config_or_listener_failure; no input attempted");
+            return 2;
+        }
+    }
+
+
+    private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
+    }
+
+    private static async Task<int> RunOwnedQualificationAsync(string configPath)
+    {
+        try
+        {
+            StandaloneTelemetryHostConfiguration config =
+                StandaloneTelemetryHostConfiguration.Load(configPath);
+            using var session = new StandaloneTelemetryHostSession(
+                config.Binding, config.BindIpv4, config.Port, config.DeliveryToken);
+            using var stop = new CancellationTokenSource();
+            ConsoleCancelEventHandler cancelHandler = (_, e) =>
+            {
+                e.Cancel = true;
+                stop.Cancel();
+            };
+            Console.CancelKeyPress += cancelHandler;
+            try
+            {
+                Task listener = session.RunAsync(stop.Token);
+                try
+                {
+                    // A fresh source may require one initial guest full scan.
+                    // Warmup does not count toward the 480-second evidence window.
+                    var warmupClock = Stopwatch.StartNew();
+                    bool ready = await StandaloneTelemetryQualification.WaitForInitialSourceAsync(
+                        config.Binding.Lab,
+                        () =>
+                        {
+                            if (listener.IsCompleted)
+                                throw new InvalidOperationException("listener-stopped");
+                            return session.ReadLatest();
+                        },
+                        () => warmupClock.ElapsedMilliseconds,
+                        static (milliseconds, token) => Task.Delay(milliseconds, token),
+                        stop.Token);
+                    if (!ready)
+                    {
+                        Console.Error.WriteLine(
+                            "Owned qualification: initial_source_not_fresh_within_30s");
+                        return 2;
+                    }
+
+                    long lastProgressAt = -30_000;
+                    var progress = new InlineProgress<VmSustainedFeedbackProgress>(update =>
+                    {
+                        if (update.ElapsedMs - lastProgressAt < 30_000 &&
+                            !update.TerminalFault) return;
+                        lastProgressAt = update.ElapsedMs;
+                        Console.WriteLine(JsonSerializer.Serialize(new
+                        {
+                            mode = "AutoFightOwnedQualificationProgress",
+                            update.Lab,
+                            update.ElapsedMs,
+                            update.RequiredDurationMs,
+                            update.Polls,
+                            update.NewSamples,
+                            update.Repeated,
+                            update.Unavailable,
+                            update.LongestNoAdvanceMs,
+                            update.TerminalFault,
+                            canAutomate = false
+                        }));
+                    });
+                    var evidenceClock = Stopwatch.StartNew();
+                    VmSustainedFeedbackReport report =
+                        await StandaloneTelemetryQualification.RunObservedAsync(
+                            config.Binding.Lab,
+                            () =>
+                            {
+                                if (listener.IsCompleted)
+                                    throw new InvalidOperationException("listener-stopped");
+                                return session.ReadLatest();
+                            },
+                            () => evidenceClock.ElapsedMilliseconds,
+                            static (milliseconds, token) => Task.Delay(milliseconds, token),
+                            stop.Token,
+                            progress);
+                    if (listener.IsCompleted || stop.IsCancellationRequested)
+                    {
+                        report = report with
+                        {
+                            SustainedTelemetryEvidencePassed = false,
+                            Reason = stop.IsCancellationRequested
+                                ? "cancelled" : "listener_stopped"
+                        };
+                    }
+
+                    Console.WriteLine(JsonSerializer.Serialize(new
+                    {
+                        mode = "AutoFightOwnedTelemetryQualification",
+                        report,
+                        sustainedQualification = report.SustainedTelemetryEvidencePassed,
+                        canAutomate = false
+                    }));
+                    return report.SustainedTelemetryEvidencePassed ? 0 : 2;
+                }
+                finally
+                {
+                    stop.Cancel();
+                    try { await listener; }
+                    catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
+                    catch (Exception) { } // Never print a private listener exception.
+                }
+            }
+            finally
+            {
+                Console.CancelKeyPress -= cancelHandler;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            Console.Error.WriteLine("Owned qualification: cancelled");
+            return 2;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+            or ArgumentException or InvalidOperationException or JsonException
+            or NotSupportedException or System.Net.Sockets.SocketException
+            or System.Security.SecurityException or OverflowException)
+        {
+            Console.Error.WriteLine(
+                "Owned qualification: invalid_config_or_listener_failure; no input attempted");
             return 2;
         }
     }

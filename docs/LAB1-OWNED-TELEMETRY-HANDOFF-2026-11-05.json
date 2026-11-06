@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "kind": "autofight-lab1-standalone-telemetry-handoff",
+  "recordedAtUtc": "2026-11-06T00:08:00Z",
+  "clientDate": "2026-11-05",
+  "clientTimezone": "America/New_York",
+  "repository": {
+    "root": "C:\\work\\AutoFight",
+    "branch": "main",
+    "baselineHead": "36ec72faa0ce7ec25b2c282dc46ccfc075e8075d",
+    "status": "tested modifications awaiting scoped commit",
+    "externalRepositories": "references-only; no RR2 runtime service"
+  },
+  "lab1": {
+    "vmx": "C:\\rift modding\\VMs\\RIFT-Lab-1\\RIFT-Lab.vmx",
+    "vmRuntimePidLastVerified": 48444,
+    "guestIpv4LastVerified": "192.168.56.128",
+    "hostVmnet8Ipv4": "192.168.56.1",
+    "gamePidLastVerified": 7164,
+    "gameStartUtcTicksLastVerified": "639294897866244204",
+    "gameExe": "C:\\RIFT_TRANSFER\\RIFT\\rift_x64.exe",
+    "gameExeSha256": "1935a05c9db6d468e34e0055014a4a99c1b5afceb1695884e24600f5c20a4be8",
+    "guestReaderInstalled": true,
+    "readerRunning": false,
+    "addonFilesInstalled": true,
+    "addonLoaded": false,
+    "addonBound": false,
+    "uiReloadSent": false,
+    "liveXyzVerified": false
+  },
+  "deployment": {
+    "stageId": "417a1d6f024143e3a7ad1bb02d715979",
+    "installedFileHashMatches": "8/8",
+    "guestReaderExeSha256": "2b75222f09d0735e0f09cdf18e9f8e271f1a3e4ad7620c93bde950162d9f7369",
+    "guestReaderPath": "C:\\Users\\mrkoo\\AppData\\Local\\AutoFight\\GuestReader\\Rift.Automation.GuestReader.exe",
+    "guestAddonPath": "C:\\Users\\mrkoo\\OneDrive\\Documents\\RIFT\\Interface\\AddOns\\AutoFight",
+    "privateGuestConfigPresent": true,
+    "secretDisclosure": "never print or commit delivery token"
+  },
+  "console": {
+    "vncAddress": "127.0.0.1:5905",
+    "vncProtocol": "RFB 003.008",
+    "developmentPython": "C:\\work\\riftreader2\\artifacts\\native-vm-control\\venv\\Scripts\\python.exe",
+    "globalPython3_14HasVncDotool": false,
+    "readOnlyScreenCaptureSucceeded": true,
+    "operatorReviewedCurrentRiftScreen": true,
+    "inputMethod": "AutoFight/scripts/lab1_chat_console.py",
+    "reviewTtlSeconds": 60,
+    "operationsAttempted": [
+      {
+        "type": "open-chat",
+        "receiptFolder": "artifacts/local/lab1-chat-open-20261105-c",
+        "status": "inputSent,keyReleaseSucceeded,chatFocusNotVerified"
+      },
+      {
+        "type": "focus-titlebar",
+        "coordinate": [
+          120,
+          8
+        ],
+        "receiptFolder": "artifacts/local/lab1-focus-titlebar-20261105-a",
+        "status": "inputSent,mouseReleaseSucceeded,gameStable"
+      },
+      {
+        "type": "open-chat",
+        "receiptFolder": "artifacts/local/lab1-chat-open-afterfocus-20261105-d",
+        "status": "inputSent,keyReleaseSucceeded,chatFocusNotVerified"
+      },
+      {
+        "type": "open-chat",
+        "receiptFolder": "artifacts/local/lab1-chat-open-third-20261105-e",
+        "status": "inputSent,keyReleaseSucceeded,chatFocusNotVerified"
+      }
+    ],
+    "reloadCommandCapturedButNotExecuted": "artifacts/local/lab1-chat-reload-20261105-a",
+    "slashCommandsSent": [],
+    "reasonStopped": "No fresh screenshot showed an open, empty and focused chat caret; automatic input stopped; do not reuse expired plans or try blind slash input.",
+    "manualRecovery": "Joey can manually activate chat in Lab1 RIFT, enter /reloadui once, and report completion; then relaunch reviewed /afbind after a fresh reader nonce."
+  },
+  "network": {
+    "guestToHostEndpoint": "http://192.168.56.1:48761/observation",
+    "temporaryListenerBound": true,
+    "listenerDurationSeconds": 8.029,
+    "receivedPeerCount": 0,
+    "listenerClosedAfterTest": true,
+    "guestPowershellControlPassed": true,
+    "probableBlocker": "Windows Firewall default inbound block and no visible AutoFight allow rule",
+    "attributionCertainty": "likely not proven by packet-level trace",
+    "firewallRuleCreated": false,
+    "firewallRuleApproval": "requested; no user reply yet",
+    "requiredCondition": "Verify effective VMnet8 profile before least-privilege admin rule; restrict local192.168.56.1, remote192.168.56.128, TCP48761"
+  },
+  "implementations": [
+    "scripts/lab1_chat_console.py",
+    "scripts/lab1_guest_reader_start.py",
+    "scripts/start_lab1_guest_reader.ps1",
+    "scripts/fetch_lab1_guest_reader_snapshot.py",
+    "scripts/bootstrap_lab1_host_telemetry.py",
+    "src/Rift.Automation.Windows/StandaloneTelemetryQualification.cs",
+    "src/Rift.Automation.Desktop/App.xaml.cs"
+  ],
+  "acceptance": {
+    "build": {
+      "status": "passed",
+      "warnings": 0,
+      "errors": 0,
+      "job": "autofight-lab1-final-integration-build-20261105"
+    },
+    "core": {
+      "passed": 149,
+      "failed": 0
+    },
+    "windows": {
+      "passed": 157,
+      "failed": 0
+    },
+    "guest": {
+      "passed": 15,
+      "failed": 0
+    },
+    "python": {
+      "passed": 58,
+      "failed": 0
+    },
+    "wpfSmokeCategoriesPassed": 6,
+    "live480Seconds": "not attempted"
+  },
+  "nextActions": [
+    {
+      "priority": 1,
+      "action": "Resolve chat focus in Lab1, or ask Joey to manually enter exactly one /reloadui; verify addon loaded before reader launch",
+      "requires": "current screenshot verified game chat state; no blind input"
+    },
+    {
+      "priority": 2,
+      "action": "Obtain explicit user approval for a narrowly scoped host firewall change after checking VMnet8 effective profile; rerun bounded TCP test",
+      "requires": "firewall approval before mutation"
+    },
+    {
+      "priority": 3,
+      "action": "Launch GuestReader --live once with scripts/lab1_guest_reader_start.py --start --stage-id 417a1d6f024143e3a7ad1bb02d715979 --confirm START-LAB1; do not auto-retry uncertain outcome",
+      "requires": "one approved UI reload completed"
+    },
+    {
+      "priority": 4,
+      "action": "Fetch guest latest.json via scripts/fetch_lab1_guest_reader_snapshot.py using live PID/start ticks, create absent-only host config with bootstrap_lab1_host_telemetry.py, send verified /afbind fresh nonce in Lab1",
+      "requires": "fresh same-reader snapshot; game and guest source pins"
+    },
+    {
+      "priority": 5,
+      "action": "Run short owned telemetry watch, require two advancing fresh XYZ; then --owned-qualify-telemetry for strict 480 seconds",
+      "requires": "guest→host TCP and addon binding verified"
+    }
+  ],
+  "safety": {
+    "physicalRiftTouched": false,
+    "lab2Touched": false,
+    "vmLifecycleChanged": false,
+    "gameMovementOrCombatIssued": false,
+    "firewallModified": false,
+    "privateTokensPrinted": false,
+    "unconfirmedInputAutomaticallyRetried": false
+  }
+}

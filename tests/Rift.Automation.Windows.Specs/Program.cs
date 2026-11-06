@@ -106,6 +106,7 @@ StandaloneTelemetrySpecs.Run(Test, Check);
 StandaloneTelemetryHttpSpecs.Run(Test, Check);
 StandaloneTelemetryHostSessionSpecs.Run(Test, Check);
 StandaloneTelemetryHostConfigurationSpecs.Run(Test, Check);
+StandaloneTelemetryQualificationSpecs.Run(Test, Check);
 StandaloneVmPulseSpecs.Run(Test, Check);
 VmTelemetryWatchSpecs.Run(Test, Check);
 VmPulseObservationSpecs.Run(Test, Check);
