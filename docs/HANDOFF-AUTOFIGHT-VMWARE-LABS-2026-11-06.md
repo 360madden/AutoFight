@@ -12,6 +12,8 @@ evidence_policy: "VERIFIED/HISTORICAL/UNVERIFIED/BLOCKED; never promote historic
 
 # AutoFight — Detailed Lab1/Lab2 Handoff (November 6, 2026)
 
+> **Follow-up verified at 08:14 UTC Nov 6:** Lab 2's exact six addon TOC/Lua files were listed in its guest directory and separately copied to a temporary host folder; every SHA-256 and byte count matched the authoritative AutoFight addon source. No extras. Independent review PASS. **This supersedes the Lab 2 on-disk content UNKNOWN cells and the old Lab 2 content warning below**; in-game load and Lab 2 GuestReader presence remain UNVERIFIED. Full evidence: [Lab 2 addon parity](m1-lab2-addon-content-parity-2026-11-06.md). No guest deployment or game input occurred.
+
 Read this after AGENTS.md and SESSION_HANDOFF.md. It supersedes their earlier dated claims about live firewall, two-lab permissions and current RIFT UI status. Check Git HEAD, VM/game identities and live process state again at each future session. This is an evidence ledger, not a claim that a PID or tool session will remain current.
 
 ## 1. Mission and ownership
