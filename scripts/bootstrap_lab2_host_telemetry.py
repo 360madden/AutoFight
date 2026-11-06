@@ -285,7 +285,7 @@ def main() -> int:
         print(json.dumps({"status": "written" if args.write else "validated-only",
                           "lab": "lab2", "port": config["port"],
                           "readerInstanceId": config["binding"]["readerInstanceId"],
-                          "readerNonce": config["binding"]["readerNonce"],
+                          "readerNonce": "[redacted]",
                           "gameProcessId": config["binding"]["gameProcessId"],
                           "output": str(args.output)}))
         return 0

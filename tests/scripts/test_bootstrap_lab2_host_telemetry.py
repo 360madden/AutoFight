@@ -224,8 +224,39 @@ class HostBootstrapSpecs(unittest.TestCase):
             status = json.loads(screen.getvalue())
             self.assertEqual(status["status"], "validated-only")
             self.assertEqual(status["lab"], "lab2")
+            self.assertEqual(status["readerNonce"], "[redacted]")
+            self.assertNotIn(NONCE, screen.getvalue())
             self.assertNotIn(source["delivery"]["token"], screen.getvalue())
             self.assertFalse(output.exists())
+
+    def test_cli_write_keeps_nonce_and_token_private(self):
+        snapshot, source, pin = fixtures()
+        snapshot["capturedAtUtc"] = datetime.now(timezone.utc).isoformat()
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            paths = [root / name for name in ("snapshot.json", "guest.local.json", "pin.json")]
+            for path, value in zip(paths, (snapshot, source, pin)):
+                path.write_text(json.dumps(value), encoding="utf-8")
+            output = root / "host-lab2.local.json"
+            argv = ["bootstrap-lab2", "--snapshot", str(paths[0]),
+                    "--guest-config", str(paths[1]), "--game-pin", str(paths[2]),
+                    "--guest-ip", "192.168.56.129", "--host-ip", "192.168.56.1",
+                    "--output", str(output), "--write"]
+            screen = io.StringIO()
+            with patch("sys.argv", argv), patch.object(
+                    bootstrap, "PRIVATE_ROOT", root), redirect_stdout(screen):
+                exit_code = bootstrap.main()
+            self.assertEqual(exit_code, 0)
+            status = json.loads(screen.getvalue())
+            self.assertEqual(status["status"], "written")
+            self.assertEqual(status["readerNonce"], "[redacted]")
+            self.assertNotIn(NONCE, screen.getvalue())
+            self.assertNotIn(source["delivery"]["token"], screen.getvalue())
+            self.assertTrue(output.exists())
+            private_config = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(private_config["binding"]["readerNonce"], NONCE)
+            self.assertEqual(private_config["deliveryToken"],
+                             source["delivery"]["token"])
 
     def test_enforced_private_root_is_regular_directory(self):
         with tempfile.TemporaryDirectory() as folder:
