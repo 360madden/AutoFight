@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="330" viewBox="0 0 1200 330" role="img" aria-labelledby="title desc">
+  <title id="title">AutoFight — 360madden</title>
+  <desc id="desc">AutoFight development preview for RIFT: standalone Windows automation observability, telemetry, navigation and control research.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="1" y2="0">
+      <stop offset="0" stop-color="#090d19"/>
+      <stop offset=".56" stop-color="#13223b"/>
+      <stop offset="1" stop-color="#1e172f"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0" x2="1">
+      <stop offset="0" stop-color="#f9fbff"/>
+      <stop offset="1" stop-color="#82ebff"/>
+    </linearGradient>
+    <linearGradient id="path" x1="0" x2="1">
+      <stop offset="0" stop-color="#34d8ff"/>
+      <stop offset=".53" stop-color="#8c8aff"/>
+      <stop offset="1" stop-color="#ffbb5a"/>
+    </linearGradient>
+    <pattern id="grid" width="38" height="38" patternUnits="userSpaceOnUse">
+      <path d="M38 0H0V38" fill="none" stroke="#8db6dc" stroke-opacity=".075"/>
+    </pattern>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="330" rx="24" fill="url(#bg)"/>
+  <rect width="1200" height="330" rx="24" fill="url(#grid)"/>
+  <path d="M0 268C142 221 239 337 387 286S621 244 716 288S983 287 1200 251V330H0Z" fill="#2d8eb7" opacity=".085"/>
+  <path d="M0 284C134 244 256 323 401 294S600 263 728 297S969 276 1200 275" fill="none" stroke="#42d6ff" stroke-width="1.4" stroke-opacity=".22"/>
+  <rect x="63" y="58" width="5" height="179" rx="2.5" fill="#35deff"/>
+  <circle cx="65" cy="48" r="8" fill="#35deff" opacity=".85"/>
+  <text x="95" y="127" fill="url(#brand)" font-family="Segoe UI, Arial, sans-serif" font-size="82" font-weight="800" letter-spacing="-3">AutoFight</text>
+  <text x="97" y="177" fill="#cbd8ee" font-family="Segoe UI, Arial, sans-serif" font-size="23" font-weight="500" letter-spacing="1.2">RIFT • TELEMETRY • NAVIGATION • CONTROL</text>
+  <rect x="96" y="209" width="171" height="37" rx="9" fill="#1f4f64" stroke="#35deff" stroke-opacity=".65"/>
+  <circle cx="114" cy="227.5" r="5" fill="#29dfb2"/>
+  <text x="129" y="233" fill="#b7f1ff" font-family="Segoe UI, Arial, sans-serif" font-size="16" font-weight="700">RESEARCH BUILD</text>
+  <text x="97" y="286" fill="#95b4cd" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="650" letter-spacing="2.6">BY 360madden</text>
+  <g opacity=".9">
+    <circle cx="978" cy="164" r="117" stroke="#7ed9ff" stroke-opacity=".17" fill="none" stroke-width="2"/>
+    <circle cx="978" cy="164" r="88" stroke="#7ed9ff" stroke-opacity=".26" fill="none" stroke-width="1.5" stroke-dasharray="5 12"/>
+    <circle cx="978" cy="164" r="60" stroke="#b6ccff" stroke-opacity=".24" fill="none" stroke-width="2"/>
+    <path d="M978 34V294M849 164H1107" stroke="#8abde9" stroke-opacity=".23" stroke-width="1.5"/>
+    <path d="M859 230L921 199L958 214L1004 140L1053 165L1096 95" fill="none" stroke="#34d8ff" stroke-width="16" opacity=".13" filter="url(#glow)"/>
+    <path d="M859 230L921 199L958 214L1004 140L1053 165L1096 95" fill="none" stroke="url(#path)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="859" cy="230" r="9" fill="#34d8ff" stroke="#12253a" stroke-width="4"/>
+    <circle cx="921" cy="199" r="6" fill="#91b9ff"/>
+    <circle cx="958" cy="214" r="6" fill="#91b9ff"/>
+    <circle cx="1004" cy="140" r="8" fill="#ffc576" stroke="#12253a" stroke-width="3"/>
+    <circle cx="1053" cy="165" r="6" fill="#91b9ff"/>
+    <circle cx="1096" cy="95" r="11" fill="#ffc576" stroke="#19253b" stroke-width="4"/>
+    <circle cx="1096" cy="95" r="22" stroke="#ffc576" fill="none" stroke-opacity=".5" stroke-dasharray="3 6"/>
+    <path d="M1107 249h-72" stroke="#fff" stroke-opacity=".3" stroke-width="2"/>
+  </g>
+  <rect x=".75" y=".75" width="1198.5" height="328.5" rx="23" stroke="#bfefff" stroke-opacity=".24" fill="none" stroke-width="1.5"/>
+</svg>

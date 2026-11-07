@@ -1,86 +1,146 @@
-# AutoFight YEA
+<p align="center">
+  <img src="docs/assets/autofight-hero.svg" alt="AutoFight — RIFT telemetry, navigation, and control research by 360madden" width="100%" />
+</p>
 
-AutoFight is a standalone Windows 11 C#/.NET 10 application for RIFT observation and eventual combat/movement automation. **Its only application source repository is C:\work\AutoFight.**
+<div align="center">
 
-AutoFight was separated from the unrelated RIFT API research repository on October 31, 2026. The earlier mistaken development location, C:\work\Rift API, remains preserved for provenance and for its independent RiftApiCollector project. Do not develop AutoFight there. RiftReader2 remains a separately owned reference and optional integration provider, not a compiled or bundled dependency.
+[![Platform: Windows 11](https://img.shields.io/badge/Windows-11%20x64-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](#-quick-start)
+[![Framework: .NET 10](https://img.shields.io/badge/.NET-10-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](#-architecture)
+[![Language: C#](https://img.shields.io/badge/C%23-WPF-239120?style=for-the-badge&logo=csharp&logoColor=white)](#-architecture)
+[![Lua addon](https://img.shields.io/badge/RIFT-Lua%20addon-2C2D72?style=for-the-badge&logo=lua&logoColor=white)](#-architecture)
+[![State: research preview](https://img.shields.io/badge/Status-Research%20Preview-F2A900?style=for-the-badge)](#-verified-status)
 
-## Current capabilities — development version 0.5.7
+**An independent RIFT observation and automation workbench**
 
-- Windows WPF application, offline synthetic replay and analysis.
-- Read-only host RIFT process inventory and manual RAC-TSV/1 unit snapshot import.
-- Existing VMware Lab 1/Lab 2 controller status and strict source-bound telemetry diagnostics.
-- An eight-minute, one-lab source-pinned telemetry qualification in CLI and WPF; WPF can save a bounded redacted historical JSON result.
-- One *explicitly supervised* legacy input-pulse interface that requires a previously authorized RR2 controller grant/arm and independently checked lab/source binding.
-- AutoFight-owned guest reader source port (RIFT process identity, addon wire decoder, full/fast memory scanning, authenticated delivery) and six-file AutoFight Lua addon, independently compilable with no RR2 assemblies. The authenticated in-process host telemetry ingest/listener is available through a read-only `--owned-telemetry` CLI watch and a separate WPF receiver panel. The bounded synthetic key executor is not a deployed guest controller.
+*From source-verified telemetry toward measured movement, navigation, and eventually combat.*
 
-**Not yet demonstrated:** fresh current live eight-minute telemetry in AutoFight, an actual game input followed by proven position response, native actor/target memory reading, automatic combat/spellcasting, measured movement, obstacle-aware navigation or multiclient combat.
+[What works](#-verified-status) · [Architecture](#-architecture) · [Quick start](#-quick-start) · [Roadmap](#-next-milestones) · [Developer handoff](SESSION_HANDOFF.md)
 
-The application must not be described as a finished autofighting bot. Controller acceptance, telemetry freshness and actual game response are different facts.
+</div>
 
-**Standalone-runtime boundary:** The WPF EXE and guest-reader EXE each build self-contained, and the AutoFight addon assets are bundled with the guest publisher. The new host receiver is available in an independent CLI and dedicated WPF read-only panel; the existing legacy telemetry/controller UI still uses the RR2 bridge. Guest deployment, live config/binding, and authorized lab testing remain outstanding. The next milestone proves fresh XYZ and independent movement feedback with no RR2 runtime service. Reference repositories remain read-only scaffolding.
+> [!IMPORTANT]
+> **AutoFight is an active development project—not a finished autonomous RIFT player.** The AutoFight-owned GuestReader has successfully delivered status updates from VMware Lab 2 to its host receiver, but **matching in-game telemetry, fresh XYZ, sustained 480-second data, and measured game movement remain unverified**. All live claims below distinguish transport, game observation, and feedback.
 
-## Build and run
+## ✨ What is AutoFight?
 
-Use **Windows PowerShell**:
+AutoFight is a modular **C# / .NET 10 / WPF** Windows project exploring a reliable, observable path from RIFT game state to independently verified actions. It is developed against two existing VMware RIFT labs. The design emphasizes **one clear owner for input**, explicit game/session identities, bounded operations, and evidence that an action actually changed the world.
 
-~~~powershell
-Set-Location 'C:\work\AutoFight'
+| 🧩 Component | Purpose | Current implementation |
+| :--- | :--- | :--- |
+| 🖥️ **Desktop workbench** | On-demand process inventory, diagnostics, offline replay, telemetry view | WPF UI and CLI commands |
+| 🧠 **Core engine** | Typed observations, freshness, event continuity, deterministic analysis | Standalone .NET library with regression tests |
+| 📡 **Host receiver** | Accept authenticated, identity-bound updates from a guest | Independent AutoFight in-process listener and watch CLI |
+| 🕵️ **GuestReader** | Inspect the pinned RIFT process for addon-produced frames | AutoFight-owned Windows executable and scanner |
+| 🌙 **RIFT Lua addon** | Emit identifiable game observations within permitted addon APIs | Six source-controlled Lua assets |
+| 🕹️ **Control foundation** | Preflight, ownership, bounded pulse and response attribution | Legacy supervised bridge and synthetic executor; *no verified game motion* |
+
+**Project boundary:** AutoFight owns its source code, tests, addon, GuestReader, host receiver, and independent build products. [RiftReader2](https://github.com/360madden/RiftReader2), the historical RiftReader projects, and other research repositories are references or optional *development* integrations—not required source checkouts for the owned data path. Some older desktop diagnostic/control UI still supports an optional legacy RR2 bridge while migration continues.
+
+## 🚦 Verified status
+
+<sub>Evidence snapshot: November 6–7, 2026. Historical VM/PID details require fresh revalidation.</sub>
+
+| Area | Status | Evidence / limitation |
+| :--- | :---: | :--- |
+| .NET 10 solution + WPF smoke | 🟢 | Release build and deterministic offline test suites previously passed |
+| AutoFight-owned addon + GuestReader | 🟢 | Built independently of RR2 assemblies; six addon files verified on Lab 2 disk |
+| Guest → host transport (Lab 2) | 🟢 | Authenticated Reader deliveries observed in a bounded live watch |
+| In-game addon load and private binding | 🟡 | On-disk assets verified; active addon/bound nonce not yet established |
+| Fresh XYZ from matched addon frame | 🔴 | 40/40 host polls unavailable; Reader reported no matching frame |
+| 480-second continuous telemetry | 🔴 | Acceptance logic exists; no AutoFight-owned live passing result |
+| Actual controlled movement with XYZ change | 🔴 | No verified input-to-position feedback loop |
+| Native read-only XYZ provider | 🟡 | Proposed second provider based on verified RR2 reference; not yet ported into AutoFight |
+| Targeting, navigation, spell rotation | 🔴 | Future work; no qualified autonomous combat |
+
+**Interpreting the evidence:** A network-delivered Reader status is **not** necessarily a game telemetry frame. A game input acknowledgment is **not** proof the character moved. The project deliberately records these as separate acceptance gates.
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart TD
+    G["🎮 RIFT in VMware Lab"] --> L["🌙 AutoFight Lua addon"]
+    L --> R["🔎 AutoFight GuestReader"]
+    R -->|"Authenticated, pinned observations"| H["📡 AutoFight host receiver"]
+    H --> V["🖥️ WPF / diagnostic CLI"]
+    V --> C["🧠 Core continuity + evidence rules"]
+    C -. "Future qualified feedback loop" .-> A["🕹️ Bounded input controller"]
+    A -. "Only after explicit readiness" .-> G
+    N["🧭 Native XYZ candidate (planned)"] -. "Alternative read-only provider" .-> C
+```
+
+- **Process and build identity:** measurements must match the correct game image, process start, lab, and Reader instance.
+- **Explicit freshness:** advancing transport is tracked separately from advancing producer data and accepted XYZ.
+- **Standalone runtime direction:** the owned telemetry path has no RiftReader2 project reference or RR2 runtime service requirement; legacy UI/controller migration is still ongoing.
+- **Operational safety:** input actions have explicit bounds, cancellation and ownership; invalid, stale, or uncertain observations fail closed.
+
+See the [architecture decision record](docs/automation-platform-architecture.md) for contracts and the [technical roadmap](docs/automation-platform-roadmap.md) for acceptance gates.
+
+## 🚀 Quick start
+
+### Requirements
+
+- Windows 11 x64
+- **.NET 10 SDK**, matching the repo's `global.json` (SDK feature band `10.0.302`, newer patch permitted)
+- PowerShell and Git
+- VMware and RIFT are **not required** for builds, offline tests, or WPF smoke checks
+
+From **Windows PowerShell**, inside a clone of this repository:
+
+```powershell
+git clone https://github.com/360madden/AutoFight.git
+Set-Location .\AutoFight
 dotnet build .\Rift.Automation.slnx -c Release
 dotnet run --project .\src\Rift.Automation.Desktop\Rift.Automation.Desktop.csproj -c Release
-~~~
+```
 
-The root global.json pins the .NET SDK 10.0.302 feature band (latest patch allowed). The WPF executable targets Windows x64 and .NET 10. Existing default UI paths into C:\work\riftreader2 are *optional local development suggestions*, not bundled private configs. Verify and reselect current source pins before using live diagnostics.
+### 🧪 Tests
 
-### Tests
+Run from the repository root in Windows PowerShell:
 
-~~~powershell
+```powershell
 dotnet run --project .\tests\Rift.Automation.Specs\Rift.Automation.Specs.csproj -c Release -- selftest
 dotnet run --project .\tests\Rift.Automation.Windows.Specs\Rift.Automation.Windows.Specs.csproj -c Release
 dotnet run --project .\tests\Rift.Automation.Guest.Specs\Rift.Automation.Guest.Specs.csproj -c Release
 dotnet run --project .\src\Rift.Automation.Desktop\Rift.Automation.Desktop.csproj -c Release -- --smoke-test
-~~~
+```
 
-The smoke test constructs controls without proving the visible window on a real desktop. See docs/current-status.md for measured results.
+Tests exercise synthetic/offline cases. A passing smoke test does **not** establish a visible desktop experience or a successful live game input.
 
-### Self-contained Windows package
+### 📦 Optional self-contained desktop build
 
-~~~powershell
-dotnet publish .\src\Rift.Automation.Desktop\Rift.Automation.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=false -p:DebugType=none -p:DebugSymbols=false -o .\artifacts\local\autofight-0.5.7-win-x64-singleexe
-~~~
+```powershell
+dotnet publish .\src\Rift.Automation.Desktop\Rift.Automation.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=false -p:DebugType=none -p:DebugSymbols=false -o .\artifacts\local\autofight-win-x64
+```
 
-To publish the optional AutoFight-owned guest reader plus six addon assets (no guest install or startup):
+This creates a local unsigned executable—not a GitHub release or installer. The separately built GuestReader and private lab configuration are only needed for advanced, explicitly configured live observation. **Do not commit local tokens, reader nonces, or host/lab configuration files.** See [GuestReader notes](docs/M1-standalone-guest-port-2026-10-31.md).
 
-~~~powershell
-dotnet publish .\src\Rift.Automation.Guest\Rift.Automation.Guest.csproj -c Release -p:PublishTrimmed=false
-~~~
+## 🗺️ Next milestones
 
-The guest executable requires an explicit `--live` invocation and a private `autofight-guest-reader.json` beside it; `--help` performs no game scan. Do not commit tokens or copy addons into a VM as a build side effect. See docs/M1-standalone-guest-port-2026-10-31.md.
+| Priority | Milestone | Acceptance target |
+| :---: | :--- | :--- |
+| **P1** | First trustworthy Lab 2 XYZ | Prove addon loaded/bound and host receives fresh, identity-matched position |
+| **P2** | Independent native XYZ candidate | Adapt only the necessary read-only sampler from RR2, with strict current-build pinning |
+| **P3** | Freshness and movement verification | Sustain the 480-second window; separately observe one reviewed small movement pulse |
+| **P4** | Standalone input path | Remove the remaining legacy controller runtime requirement |
+| **P5** | Navigation and combat | Add target/ability state, movement planning, collision/LOS and recovery only on qualified feedback |
 
-### AutoFight-owned read-only telemetry diagnostic
+## 📚 Project documentation
 
-After independently verifying the current guest process and reader binding, create a private host configuration with a filename ending in `.local.json` (ignored by Git). It must contain a `binding` object with `lab`, `guestIpv4`, `readerInstanceId`, `readerNonce`, `gameProcessId`, `gameProcessStartUtcTicks`, `gameExecutablePath`, and `gameExecutableSha256`; the root also requires `bindIpv4` (the host's actual private IPv4), `port` (1024–65535), and `deliveryToken` (the same private token configured on the guest).
+| Document | What you'll find |
+| :--- | :--- |
+| [Session handoff](SESSION_HANDOFF.md) | Most recent continuation links and repository routing |
+| [Current status](docs/current-status.md) | Verified implementation, test receipts, and outstanding gates |
+| [Lab 2 first-XYZ handoff](docs/HANDOFF-AUTOFIGHT-LAB2-FIRST-XYZ-2026-11-06.md) | Exact source/Reader transport outcome and next lab steps |
+| [Architecture](docs/automation-platform-architecture.md) | Contracts, identity, state and provider arbitration |
+| [Roadmap](docs/automation-platform-roadmap.md) | Development milestones and acceptance gates |
+| [Developer instructions](AGENTS.md) | Project ownership, engineering and build requirements |
 
-The reader instance and nonce are freshly generated when the guest reader starts; do not guess them or reuse an old session's binding. The host and guest addresses must be private IPv4 addresses. The guest sends `POST /observation` using the configured token.
+---
 
-From `C:\work\AutoFight` in PowerShell:
+<div align="center">
 
-~~~powershell
-dotnet run --project .\src\Rift.Automation.Desktop\Rift.Automation.Desktop.csproj -c Release -- --owned-telemetry .\artifacts\local\host-lab1.local.json 15
-~~~
+**AutoFight** · Created and maintained by **[360madden](https://github.com/360madden)**
 
-The CLI watches for 1–120 seconds, emits redacted JSON progress/status and XYZ only if fresh, and returns exit 0 only with at least two advancing current-position samples and no session/order change. The VMware tab's separate **AUTOFIGHT STANDALONE TELEMETRY** panel accepts the same private host configuration and has explicit Start/Stop, age, sequence, producer-progress (advance/repeat), and XYZ display; it starts inactive and clears XYZ on unavailable/stale data. Neither diagnostic is the 480-second sustained qualification, game input, or proof of movement. A missing/invalid private configuration or absent guest stream fails closed. Running the CLI never starts a guest reader, installs an addon, or issues input.
+<sub>Built to turn telemetry into verifiable behavior—one measured milestone at a time.</sub>
 
-The verified local AutoFight 0.5.7 executable is at C:\work\AutoFight\artifacts\local\autofight-0.5.7-win-x64-singleexe\Rift.Automation.Desktop.exe (one file, 139,984,037 bytes; SHA-256 87487b8a511585450af022128869611678f30ff36507a8f1b516966e6a24ce23). Direct --help and --smoke-test checks passed. See docs/release-autofight-0.5.7-2026-10-31.md. This is not an installer or signed public release. The original 0.5.6 release under C:\work\Rift API is historical and must not be confused with a package built from AutoFight.
-
-## Project navigation
-
-- SESSION_HANDOFF.md — resume point, exact Git/source routing, verification, and next functional milestone
-
-- docs/current-status.md — current factual implementation and next gate
-- docs/M1-standalone-guest-port-2026-10-31.md — guest/source port provenance, offline evidence, remaining live gates
-- docs/standalone-autonomous-directive-2026-10-31.md — current user-directed standalone runtime milestone and parallel development requirements
-- docs/automation-platform-master-prompt-v3.md — earlier corrected design directive
-- docs/automation-platform-architecture.md — design and contracts
-- docs/automation-platform-roadmap.md — milestones
-- docs/MIGRATION-2026-10-31.md — exact migration and source history
-- docs/README.md — index and historical-document warnings
+</div>
