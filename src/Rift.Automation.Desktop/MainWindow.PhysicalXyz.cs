@@ -1,8 +1,7 @@
 using System.Diagnostics;
-using System.IO;
-using System.Text;
-using Microsoft.Win32;
 using System.Globalization;
+using System.IO;
+using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -503,7 +502,7 @@ public partial class MainWindow
 
     /// <summary>
     /// Explicit user-only, read-only evidence export. Destination path stays offscreen;
-    /// only atomic, no-clobber publication can produce a final JSON file.
+    /// only the validated shared exporter can publish a new, no-clobber JSON file.
     /// </summary>
     private void PhysicalXyzTraceSaveClicked(object sender, RoutedEventArgs e)
     {
@@ -537,77 +536,18 @@ public partial class MainWindow
                 return;
             }
 
-            WritePhysicalXyzTraceNewFile(dialog.FileName, snapshot.ToJson());
+            PhysicalRiftPositionTraceExporter.SaveNew(dialog.FileName, snapshot);
             PhysicalXyzTraceSaveStatusText.Text = "Saved a new JSON file with "
                 + snapshot.RetainedSamples.ToString(CultureInfo.InvariantCulture)
                 + " retained read-only outcomes. Historical evidence only; no producer freshness or movement proof.";
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+        catch (Exception exception) when (exception is InvalidDataException or IOException or UnauthorizedAccessException
             or ArgumentException or InvalidOperationException or NotSupportedException
             or System.Security.SecurityException)
         {
             PhysicalXyzTraceSaveStatusText.Text =
                 "Save failed or destination exists. Choose a new JSON filename; no existing file was replaced.";
         }
-    }
-
-    private static void WritePhysicalXyzTraceNewFile(string selectedPath, string json)
-    {
-        if (string.IsNullOrWhiteSpace(selectedPath) || !Path.IsPathFullyQualified(selectedPath)
-            || !string.Equals(Path.GetExtension(selectedPath), ".json", StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException("An absolute JSON destination is required.", nameof(selectedPath));
-
-        if (selectedPath.StartsWith(@"\\?\", StringComparison.Ordinal)
-            || selectedPath.StartsWith(@"\\.\", StringComparison.Ordinal))
-            throw new ArgumentException("An ordinary absolute path is required.", nameof(selectedPath));
-
-        string destination = Path.GetFullPath(selectedPath);
-        string fileName = Path.GetFileName(destination);
-        string stem = Path.GetFileNameWithoutExtension(fileName);
-        if (fileName.Contains(':', StringComparison.Ordinal) || string.IsNullOrWhiteSpace(stem)
-            || IsReservedPhysicalXyzTraceStem(stem))
-            throw new ArgumentException("An ordinary JSON filename is required.", nameof(selectedPath));
-        string parent = Path.GetDirectoryName(destination)
-            ?? throw new ArgumentException("A destination directory is required.", nameof(selectedPath));
-        if (!Directory.Exists(parent))
-            throw new DirectoryNotFoundException("Destination directory unavailable.");
-
-        // Stage in the selected directory, then publish without ever replacing an
-        // existing destination. A failed write cannot leave a partial final JSON.
-        string staging = Path.Combine(parent,
-            "." + fileName + "." + Guid.NewGuid().ToString("N") + ".tmp");
-        bool ownsStaging = false;
-        try
-        {
-            byte[] bytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(json);
-            using (var file = new FileStream(staging, FileMode.CreateNew,
-                FileAccess.Write, FileShare.None))
-            {
-                ownsStaging = true;
-                file.Write(bytes);
-                file.Flush(flushToDisk: true);
-            }
-            File.Move(staging, destination, overwrite: false);
-            ownsStaging = false;
-        }
-        finally
-        {
-            if (ownsStaging)
-            {
-                try { File.Delete(staging); }
-                catch (IOException) { /* Never remove an existing destination. */ }
-                catch (UnauthorizedAccessException) { /* Preserve original failure. */ }
-            }
-        }
-    }
-
-    private static bool IsReservedPhysicalXyzTraceStem(string stem)
-    {
-        string upper = stem.ToUpperInvariant();
-        return upper is "CON" or "PRN" or "AUX" or "NUL"
-            || (upper.Length == 4 && upper[3] is >= '1' and <= '9'
-                && (upper.StartsWith("COM", StringComparison.Ordinal)
-                    || upper.StartsWith("LPT", StringComparison.Ordinal)));
     }
 
     private static bool ValidPhysicalXyzCandidate(PhysicalRiftPositionResult sample) =>
