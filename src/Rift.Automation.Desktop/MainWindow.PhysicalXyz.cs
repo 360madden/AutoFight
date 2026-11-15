@@ -28,7 +28,11 @@ public partial class MainWindow
     private int _physicalXyzCandidates;
     private int _physicalXyzUnavailable;
     private int _physicalXyzIdentityFaults;
+    private int _physicalXyzContinuityFaults;
     private int _physicalXyzErrors;
+    private int _physicalXyzChangedSamples;
+    private const int PhysicalXyzRecentChangeLimit = 20;
+    private readonly Queue<string> _physicalXyzRecentChanges = new();
 
     private void PhysicalXyzRefreshClicked(object sender, RoutedEventArgs e)
     {
@@ -196,7 +200,10 @@ public partial class MainWindow
             _physicalXyzCandidates = 0;
             _physicalXyzUnavailable = 0;
             _physicalXyzIdentityFaults = 0;
+            _physicalXyzContinuityFaults = 0;
             _physicalXyzErrors = 0;
+            ResetPhysicalXyzChangeHistory();
+            PhysicalXyzHistorySourceText.Text = FormatPhysicalXyzHistorySource(processId, startTicks, null);
             UpdatePhysicalXyzCounters();
 
             var stop = new CancellationTokenSource();
@@ -294,7 +301,10 @@ public partial class MainWindow
                             or PhysicalRiftPositionChangeStatus.InvalidCandidate
                             or PhysicalRiftPositionChangeStatus.LimitReached)
                         {
-                            _physicalXyzIdentityFaults++;
+                            if (comparison.Status == PhysicalRiftPositionChangeStatus.IdentityChanged)
+                                _physicalXyzIdentityFaults++;
+                            else
+                                _physicalXyzContinuityFaults++;
                             ApplyPhysicalXyzNonCandidate(
                                 "Comparison invalidated: " + comparison.Reason + ". Refresh and reselect.",
                                 Brushes.LightCoral);
@@ -311,6 +321,9 @@ public partial class MainWindow
                             ending = "Stopped: player identity changed. Refresh and reselect.";
                             break;
                         }
+                        if (_physicalXyzPinnedPlayerKey is null)
+                            PhysicalXyzHistorySourceText.Text = FormatPhysicalXyzHistorySource(
+                                processId, startTicks, sample.PlayerUnitKey);
                         _physicalXyzPinnedPlayerKey = sample.PlayerUnitKey;
                         _physicalXyzCandidates++;
                         _physicalXyzVisibleCandidate = sample;
@@ -320,6 +333,8 @@ public partial class MainWindow
                             + "Producer freshness and movement are NOT qualified.";
                         PhysicalXyzStatusText.Foreground = Brushes.LightGreen;
                         PhysicalXyzDifferenceText.Text = FormatPhysicalXyzComparison(comparison);
+                        if (comparison.Status == PhysicalRiftPositionChangeStatus.Changed)
+                            RecordPhysicalXyzCoordinateChange(sample, comparison);
                         UpdatePhysicalXyzCandidateAge();
                     }
                     else if (sample.Status == PhysicalRiftPositionStatus.Candidate)
@@ -458,6 +473,65 @@ public partial class MainWindow
         };
     }
 
+    /// <summary>
+    /// A session's source remains labeled with the recorded history after Stop or
+    /// source loss; mere refresh/selection never alters this pinned provenance.
+    /// </summary>
+    private static string FormatPhysicalXyzHistorySource(int processId, long startTicks, ulong? playerUnitKey)
+    {
+        return "History source (last successfully started session; HISTORICAL after Stop): PID "
+            + processId.ToString(CultureInfo.InvariantCulture)
+            + " | process start UTC ticks " + startTicks.ToString(CultureInfo.InvariantCulture)
+            + " | player unit key " + (playerUnitKey is > 0
+                ? playerUnitKey.Value.ToString(CultureInfo.InvariantCulture)
+                : "pending first valid sample");
+    }
+
+    /// <summary>
+    /// Retain only bounded, manually copyable evidence of coordinate VALUE changes.
+    /// This is historical acquisition evidence, never current XYZ or movement proof.
+    /// </summary>
+    private void RecordPhysicalXyzCoordinateChange(
+        PhysicalRiftPositionResult sample, PhysicalRiftPositionChangeSnapshot comparison)
+    {
+        if (comparison.Status != PhysicalRiftPositionChangeStatus.Changed)
+            return;
+        _physicalXyzChangedSamples++;
+        string capturedUtc = sample.CapturedAtUtc.ToUniversalTime()
+            .ToString("yyyy-MM-dd HH:mm:ss.fff 'UTC'", CultureInfo.InvariantCulture);
+        string distance = comparison.Distance3D.GetValueOrDefault()
+            .ToString("F3", CultureInfo.InvariantCulture);
+        string entry = "#"
+            + _physicalXyzChangedSamples.ToString(CultureInfo.InvariantCulture)
+            + "  " + capturedUtc
+            + "  |ΔX|=" + comparison.AbsoluteDeltaX.GetValueOrDefault().ToString("F3", CultureInfo.InvariantCulture)
+            + "  |ΔY|=" + comparison.AbsoluteDeltaY.GetValueOrDefault().ToString("F3", CultureInfo.InvariantCulture)
+            + "  |ΔZ|=" + comparison.AbsoluteDeltaZ.GetValueOrDefault().ToString("F3", CultureInfo.InvariantCulture)
+            + "  distance3D=" + distance
+            + "  | result XYZ "
+            + sample.X.GetValueOrDefault().ToString("F3", CultureInfo.InvariantCulture) + "/"
+            + sample.Y.GetValueOrDefault().ToString("F3", CultureInfo.InvariantCulture) + "/"
+            + sample.Z.GetValueOrDefault().ToString("F3", CultureInfo.InvariantCulture);
+
+        if (_physicalXyzRecentChanges.Count >= PhysicalXyzRecentChangeLimit)
+            _physicalXyzRecentChanges.Dequeue();
+        _physicalXyzRecentChanges.Enqueue(entry);
+        PhysicalXyzChangeSummaryText.Text = "Observed coordinate-value differences this session: "
+            + _physicalXyzChangedSamples.ToString(CultureInfo.InvariantCulture)
+            + ". Last: " + capturedUtc + ", 3D step distance " + distance
+            + ". HISTORICAL only; not proven gameplay movement.";
+        PhysicalXyzChangeHistoryText.Text = string.Join(Environment.NewLine, _physicalXyzRecentChanges);
+    }
+
+    private void ResetPhysicalXyzChangeHistory()
+    {
+        _physicalXyzChangedSamples = 0;
+        _physicalXyzRecentChanges.Clear();
+        PhysicalXyzChangeSummaryText.Text =
+            "Observed coordinate-value differences this session: 0. No changes recorded.";
+        PhysicalXyzChangeHistoryText.Text = "No coordinate-value differences recorded in this session.";
+    }
+
     private void ApplyPhysicalXyzNonCandidate(string status, Brush statusBrush)
     {
         ClearPhysicalXyzPosition();
@@ -482,7 +556,9 @@ public partial class MainWindow
             "Attempts: " + _physicalXyzAttempts.ToString(CultureInfo.InvariantCulture)
             + "  |  Candidates: " + _physicalXyzCandidates.ToString(CultureInfo.InvariantCulture)
             + "  |  Unavailable: " + _physicalXyzUnavailable.ToString(CultureInfo.InvariantCulture)
+            + "  |  Changes: " + _physicalXyzChangedSamples.ToString(CultureInfo.InvariantCulture)
             + "  |  Identity faults: " + _physicalXyzIdentityFaults.ToString(CultureInfo.InvariantCulture)
+            + "  |  Continuity faults: " + _physicalXyzContinuityFaults.ToString(CultureInfo.InvariantCulture)
             + "  |  Errors: " + _physicalXyzErrors.ToString(CultureInfo.InvariantCulture);
     }
 
@@ -567,13 +643,18 @@ public partial class MainWindow
         PhysicalRiftPositionChangeSnapshot baseline = exampleTracker.Observe(example, 100);
         PhysicalRiftPositionChangeSnapshot moved = exampleTracker.Observe(
             example with { X = 4.25f, CapturedAtUtc = DateTimeOffset.UtcNow }, 1200);
-        return PhysicalXyzTab is not null
+        bool initial = PhysicalXyzTab is not null
             && ObserverTabs.Items.IndexOf(PhysicalXyzTab) == 0
             && PhysicalXyzClientPicker is { Items.Count: 0 }
             && PhysicalXyzStartButton is { IsEnabled: false }
             && PhysicalXyzStopButton is { IsEnabled: false }
             && PhysicalXyzCoordinatesText?.Text == "XYZ: unavailable"
             && PhysicalXyzDifferenceText?.Text == "Position comparison: no baseline."
+            && PhysicalXyzChangeSummaryText.Text.Contains("differences this session: 0", StringComparison.Ordinal)
+            && PhysicalXyzChangeHistoryText.Text == "No coordinate-value differences recorded in this session."
+            && PhysicalXyzHistorySourceText.Text == "History source: no pinned observation session yet."
+            && FormatPhysicalXyzHistorySource(123, 456, null).Contains("PID 123 | process start UTC ticks 456 | player unit key pending", StringComparison.Ordinal)
+            && FormatPhysicalXyzHistorySource(123, 456, 42).EndsWith("player unit key 42", StringComparison.Ordinal)
             && baseline.Status == PhysicalRiftPositionChangeStatus.Baseline
             && moved.Status == PhysicalRiftPositionChangeStatus.Changed
             && FormatPhysicalXyzComparison(moved).Contains("not proven gameplay movement", StringComparison.Ordinal)
@@ -585,5 +666,20 @@ public partial class MainWindow
             && FormatPhysicalXyzCandidate(notFresh) == "XYZ: unavailable"
             && PhysicalXyzEvidenceText.Text.Contains("NOT QUALIFIED", StringComparison.Ordinal)
             && PhysicalXyzEvidenceText.Text.Contains("input authority NONE", StringComparison.Ordinal);
+
+        // Pure presentation fixture; no process listing, memory reads, timers or game input.
+        // Confirm historical differences remain visible and the retained list stays bounded.
+        for (int i = 0; i < PhysicalXyzRecentChangeLimit + 3; i++)
+            RecordPhysicalXyzCoordinateChange(example with { X = 4.25f + i }, moved);
+        bool retained = _physicalXyzChangedSamples == PhysicalXyzRecentChangeLimit + 3
+            && _physicalXyzRecentChanges.Count == PhysicalXyzRecentChangeLimit
+            && !PhysicalXyzChangeHistoryText.Text.Contains("#1  ", StringComparison.Ordinal)
+            && PhysicalXyzChangeHistoryText.Text.Contains("#23  ", StringComparison.Ordinal)
+            && PhysicalXyzChangeSummaryText.Text.Contains("HISTORICAL only", StringComparison.Ordinal)
+            && PhysicalXyzChangeSummaryText.Text.Contains("not proven gameplay movement", StringComparison.Ordinal);
+        ResetPhysicalXyzChangeHistory();
+        bool reset = _physicalXyzChangedSamples == 0 && _physicalXyzRecentChanges.Count == 0
+            && PhysicalXyzChangeHistoryText.Text == "No coordinate-value differences recorded in this session.";
+        return initial && retained && reset;
     }
 }

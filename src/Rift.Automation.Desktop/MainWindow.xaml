@@ -40,9 +40,27 @@
                          FontSize="24" FontWeight="SemiBold" Margin="0,10,0,0"/>
               <TextBlock x:Name="PhysicalXyzCandidateAgeText" Text="Candidate age: unavailable" Margin="0,8,0,0"/>
               <TextBlock x:Name="PhysicalXyzDifferenceText" Text="Position comparison: no baseline." Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#B9D5CA"/>
-              <TextBlock x:Name="PhysicalXyzCountsText" Text="Attempts: 0  |  Candidates: 0  |  Unavailable: 0  |  Identity faults: 0  |  Errors: 0"
+              <TextBlock x:Name="PhysicalXyzCountsText" Text="Attempts: 0  |  Candidates: 0  |  Unavailable: 0  |  Changes: 0  |  Identity faults: 0  |  Continuity faults: 0  |  Errors: 0"
                          TextWrapping="Wrap" Margin="0,8,0,0" Foreground="#A9BED7"/>
-              <TextBlock x:Name="PhysicalXyzEvidenceText" Margin="0,14,0,0" TextWrapping="Wrap" Foreground="#F0CD7A"
+              <Border BorderBrush="#416574" BorderThickness="1" Padding="12" Margin="0,12,0,0" CornerRadius="6">
+                 <StackPanel>
+                   <TextBlock Text="RETAINED COORDINATE-CHANGE EVIDENCE" FontWeight="SemiBold" Foreground="#A9F0D6"/>
+                   <TextBlock x:Name="PhysicalXyzHistorySourceText"
+                              Text="History source: no pinned observation session yet."
+                              TextWrapping="Wrap" FontFamily="Consolas" Margin="0,6,0,0" Foreground="#B9D5CA"/>
+                   <TextBlock x:Name="PhysicalXyzChangeSummaryText"
+                              Text="Observed coordinate-value differences this session: 0. No changes recorded."
+                              TextWrapping="Wrap" Margin="0,6,0,0" Foreground="#A9F0D6"/>
+                   <TextBlock Text="Last 20 observed changes; stays visible after Stop. Select the text and press Ctrl+C to copy. Historical data, never live XYZ or proof of gameplay movement."
+                              TextWrapping="Wrap" Margin="0,7,0,6" Foreground="#A9BED7"/>
+                   <TextBox x:Name="PhysicalXyzChangeHistoryText" Height="112" IsReadOnly="True"
+                            Text="No coordinate-value differences recorded in this session."
+                            VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                            TextWrapping="NoWrap" FontFamily="Consolas" Foreground="#E6EDF7"
+                            Background="#101827" BorderBrush="#3A4C64"/>
+                 </StackPanel>
+               </Border>
+               <TextBlock x:Name="PhysicalXyzEvidenceText" Margin="0,14,0,0" TextWrapping="Wrap" Foreground="#F0CD7A"
                          Text="NATIVE CANDIDATE ONLY - passive freshness NOT QUALIFIED; 480-second qualification NOT PASSED; gameplay input authority NONE."/>
             </StackPanel>
           </Border>

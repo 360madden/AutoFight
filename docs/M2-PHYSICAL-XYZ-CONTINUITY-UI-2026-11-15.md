@@ -1,5 +1,7 @@
 # AutoFight M2 — Physical RIFT live XYZ continuity and desktop observer
 
+> **Later same-day successor:** [M3 retained coordinate-change history](M3-PHYSICAL-XYZ-CHANGE-HISTORY-2026-11-15.md) observed a different pinned physical XYZ across timed snapshots and added bounded, source-labeled WPF change history that survives Stop. This M2 receipt remains the earlier live comparison/desktop milestone; see M3 for the latest operator test procedure.
+
 **Date:** November 15, 2026 (America/New_York)  
 **Machine:** AMD-DESKTOP, verified through Workbridge  
 **Repository:** `C:\work\AutoFight`, branch `main`  

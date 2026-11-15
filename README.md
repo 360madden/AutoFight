@@ -50,8 +50,8 @@ AutoFight is a modular **C# / .NET 10 / WPF** Windows project exploring a reliab
 | Fresh XYZ from matched addon frame | 🔴 | 40/40 host polls unavailable; Reader reported no matching frame |
 | 480-second continuous telemetry | 🔴 | Acceptance logic exists; no AutoFight-owned live passing result |
 | Actual controlled movement with XYZ change | 🔴 | No verified input-to-position feedback loop |
-| Physical native read-only XYZ provider | 🟢 | AutoFight-owned exact-build C# reader acquired actual physical RIFT XYZ repeatedly on Nov 15; 4/4 samples in the latest watch, all candidate-only |
-| Physical XYZ WPF and coordinate comparisons | 🟢 | First/default on-demand tab, fail-closed stale/identity checks, Baseline/Unchanged/Changed deltas; 7 synthetic smoke categories passed, not a visible UI test |
+| Physical native read-only XYZ provider | 🟢 | AutoFight-owned reader observed two different XYZ positions ~55.84 units apart under unchanged game/player identity; later 4/4 samples matched the new position. Value-change observed, producer freshness and action cause unqualified |
+| Physical XYZ WPF and coordinate comparisons | 🟢 | First/default on-demand tab with sticky change count, historical last change, last 20 timestamped deltas and pinned process/player source; 7 synthetic smoke categories passed, visible click-through pending |
 | Targeting, navigation, spell rotation | 🔴 | Future work; no qualified autonomous combat |
 
 **Interpreting the evidence:** A network-delivered Reader status is **not** necessarily a game telemetry frame. A game input acknowledgment is **not** proof the character moved. The project deliberately records these as separate acceptance gates.
@@ -121,7 +121,9 @@ dotnet run --project .\src\Rift.Automation.Desktop\Rift.Automation.Desktop.cspro
 
 The executable's SHA-256 must exactly match the pinned current-build recipe. An accepted `Candidate` means an anchored, newly acquired memory reading—not independently proven producer freshness, movement, or permission to automate. The watch is explicitly bounded, emits **Baseline/Unchanged/Changed** coordinate comparisons and 3D deltas, and never controls RIFT.
 
-For the on-demand desktop observer, launch AutoFight without CLI arguments. In the first tab **Physical RIFT – Live XYZ**, click **Refresh physical RIFT clients**, select the exact RIFT process, then **Start read-only XYZ**; use **Stop sampling** to cancel. The desktop acquires about once per second, clears stale or invalid coordinates and never moves or focuses the game. The tab's synthetic smoke has passed; a visible interactive click-through remains outstanding. See the [first native XYZ evidence](docs/M1-PHYSICAL-NATIVE-XYZ-2026-11-15.md) and [live comparison/desktop milestone](docs/M2-PHYSICAL-XYZ-CONTINUITY-UI-2026-11-15.md).
+For the on-demand desktop observer, launch AutoFight without CLI arguments. In the first tab **Physical RIFT – Live XYZ**, click **Refresh physical RIFT clients**, select the exact RIFT process, then **Start read-only XYZ**; use **Stop sampling** to cancel. The desktop acquires about once per second, clears stale or invalid **live** coordinates and never moves or focuses the game.
+
+For a user-driven movement test, wait for a few stable readings, manually focus RIFT, move to a different position, **stay there for 3–5 seconds**, then return to AutoFight. The **Retained coordinate-change evidence** panel preserves the total change count and latest 20 UTC-stamped coordinate differences, including 3D distances and the original PID/start/player identity, even after Stop; select text and press Ctrl+C to copy. These are historical *value-change* observations, not proof of producer freshness or an AutoFight-controlled move. Synthetic smoke has passed; a visible interactive click-through remains outstanding. See [M1 first native reading](docs/M1-PHYSICAL-NATIVE-XYZ-2026-11-15.md), [M2 live tracker](docs/M2-PHYSICAL-XYZ-CONTINUITY-UI-2026-11-15.md), and [M3 retained movement-test evidence](docs/M3-PHYSICAL-XYZ-CHANGE-HISTORY-2026-11-15.md).
 
 ### 📦 Optional self-contained desktop build
 
@@ -136,7 +138,7 @@ This creates a local unsigned executable—not a GitHub release or installer. Th
 | Priority | Milestone | Acceptance target |
 | :---: | :--- | :--- |
 | **P1** | First trustworthy Lab 2 XYZ | Prove addon loaded/bound and host receives fresh, identity-matched position |
-| **P2** | Physical XYZ comparison and freshness qualification | Native reader, coordinate comparison and desktop observer implemented Nov 15; next observe a user-driven position change, visible UI behavior and independent producer freshness |
+| **P2** | Physical XYZ comparison and freshness qualification | Two distinct positions and new sticky desktop history verified Nov 15; next capture a continuous **user-driven** movement event, visible UI behavior and independent producer freshness |
 | **P3** | Freshness and movement verification | Sustain the 480-second window; separately observe one reviewed small movement pulse |
 | **P4** | Standalone input path | Remove the remaining legacy controller runtime requirement |
 | **P5** | Navigation and combat | Add target/ability state, movement planning, collision/LOS and recovery only on qualified feedback |
@@ -147,6 +149,7 @@ This creates a local unsigned executable—not a GitHub release or installer. Th
 | :--- | :--- |
 | [Session handoff](SESSION_HANDOFF.md) | Most recent continuation links and repository routing |
 | [Current status](docs/current-status.md) | Verified implementation, test receipts, and outstanding gates |
+| [M3 retained XYZ-change evidence](docs/M3-PHYSICAL-XYZ-CHANGE-HISTORY-2026-11-15.md) | Latest source-pinned coordinate difference, bounded 20-event history, user movement-test steps |
 | [Live physical XYZ continuity + WPF milestone](docs/M2-PHYSICAL-XYZ-CONTINUITY-UI-2026-11-15.md) | Latest 4/4 read-only watch, comparison semantics, 333 tests and desktop scope |
 | [Lab 2 first-XYZ handoff](docs/HANDOFF-AUTOFIGHT-LAB2-FIRST-XYZ-2026-11-06.md) | Exact source/Reader transport outcome and next lab steps |
 | [Architecture](docs/automation-platform-architecture.md) | Contracts, identity, state and provider arbitration |
