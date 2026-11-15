@@ -19,7 +19,7 @@
 </div>
 
 > [!IMPORTANT]
-> **AutoFight is an active development project—not a finished autonomous RIFT player.** The AutoFight-owned GuestReader has successfully delivered status updates from VMware Lab 2 to its host receiver, but **matching in-game telemetry, fresh XYZ, sustained 480-second data, and measured game movement remain unverified**. All live claims below distinguish transport, game observation, and feedback.
+> **AutoFight is an active development project—not a finished autonomous RIFT player.** On November 15, its own current-build native reader obtained real XYZ candidates from physical RIFT on AMD-DESKTOP without any RR2 service or gameplay input. **Passive producer freshness, matching VMware addon telemetry, sustained 480-second qualification, and measured game movement remain unverified.** The earlier Lab 2 Reader-to-host transport alone is not game data.
 
 ## ✨ What is AutoFight?
 
@@ -38,7 +38,7 @@ AutoFight is a modular **C# / .NET 10 / WPF** Windows project exploring a reliab
 
 ## 🚦 Verified status
 
-<sub>Evidence snapshot: November 6–7, 2026. Historical VM/PID details require fresh revalidation.</sub>
+<sub>Evidence snapshot: November 15 physical native XYZ; November 6–7 VMware evidence remains historical. Revalidate process identities on every use.</sub>
 
 | Area | Status | Evidence / limitation |
 | :--- | :---: | :--- |
@@ -49,7 +49,7 @@ AutoFight is a modular **C# / .NET 10 / WPF** Windows project exploring a reliab
 | Fresh XYZ from matched addon frame | 🔴 | 40/40 host polls unavailable; Reader reported no matching frame |
 | 480-second continuous telemetry | 🔴 | Acceptance logic exists; no AutoFight-owned live passing result |
 | Actual controlled movement with XYZ change | 🔴 | No verified input-to-position feedback loop |
-| Native read-only XYZ provider | 🟡 | Proposed second provider based on verified RR2 reference; not yet ported into AutoFight |
+| Physical native read-only XYZ provider | 🟢 | AutoFight-owned exact-build C# reader acquired actual physical RIFT XYZ twice on Nov 15; candidates only, not passive-freshness qualified |
 | Targeting, navigation, spell rotation | 🔴 | Future work; no qualified autonomous combat |
 
 **Interpreting the evidence:** A network-delivered Reader status is **not** necessarily a game telemetry frame. A game input acknowledgment is **not** proof the character moved. The project deliberately records these as separate acceptance gates.
@@ -106,6 +106,18 @@ dotnet run --project .\src\Rift.Automation.Desktop\Rift.Automation.Desktop.cspro
 
 Tests exercise synthetic/offline cases. A passing smoke test does **not** establish a visible desktop experience or a successful live game input.
 
+### Native XYZ diagnostic (physical RIFT)
+
+The new standalone reader is **read-only**. Run `--clients` first to obtain the exact PID and `Identity` (`PID:process-start-UTC-ticks`), then use those values in the native commands:
+
+```powershell
+dotnet run --project .\src\Rift.Automation.Desktop\Rift.Automation.Desktop.csproj -c Release -- --clients
+dotnet run --project .\src\Rift.Automation.Desktop\Rift.Automation.Desktop.csproj -c Release -- --physical-xyz <pid> <start-utc-ticks>
+dotnet run --project .\src\Rift.Automation.Desktop\Rift.Automation.Desktop.csproj -c Release -- --physical-xyz-watch <pid> <start-utc-ticks> 5
+```
+
+The executable's SHA-256 must exactly match the pinned current-build recipe. An accepted `Candidate` means an anchored, newly acquired memory reading—not independently proven producer freshness, movement, or permission to automate. The watch is explicitly bounded and does not control RIFT. See the [November 15 native XYZ evidence](docs/M1-PHYSICAL-NATIVE-XYZ-2026-11-15.md).
+
 ### 📦 Optional self-contained desktop build
 
 ```powershell
@@ -119,7 +131,7 @@ This creates a local unsigned executable—not a GitHub release or installer. Th
 | Priority | Milestone | Acceptance target |
 | :---: | :--- | :--- |
 | **P1** | First trustworthy Lab 2 XYZ | Prove addon loaded/bound and host receives fresh, identity-matched position |
-| **P2** | Independent native XYZ candidate | Adapt only the necessary read-only sampler from RR2, with strict current-build pinning |
+| **P2** | Native XYZ freshness qualification | Standalone exact-build reader and first live physical candidate achieved Nov 15; next verify passive source refresh and scene/actor continuity |
 | **P3** | Freshness and movement verification | Sustain the 480-second window; separately observe one reviewed small movement pulse |
 | **P4** | Standalone input path | Remove the remaining legacy controller runtime requirement |
 | **P5** | Navigation and combat | Add target/ability state, movement planning, collision/LOS and recovery only on qualified feedback |
