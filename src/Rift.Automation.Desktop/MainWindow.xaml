@@ -66,7 +66,10 @@
                     <TextBlock x:Name="PhysicalXyzTraceSummaryText"
                                Text="Trace: no verified observation session yet. 0 samples retained."
                                Margin="0,6,0,0" TextWrapping="Wrap" Foreground="#C9D8F0"/>
-                    <TextBlock Text="Retains up to 600 read outcomes (including unavailable/error) after Stop or an identity fault. A verified new Start replaces the old trace. No automatic file writes."
+                    <TextBlock x:Name="PhysicalXyzTraceAssessmentText"
+                                Text="A/B assessment: insufficient evidence. Next: observe repeated XYZ values at one coordinate plateau."
+                                Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#F0CD7A"/>
+                     <TextBlock Text="Retains up to 600 read outcomes (including unavailable/error) after Stop or an identity fault. A verified new Start replaces the old trace. No automatic file writes."
                                TextWrapping="Wrap" Margin="0,5,0,9" Foreground="#A9BED7"/>
                     <Button x:Name="PhysicalXyzTraceSaveButton" Content="Save read-only trace…" Click="PhysicalXyzTraceSaveClicked"
                             IsEnabled="False" HorizontalAlignment="Left"/>

@@ -475,11 +475,24 @@ public partial class MainWindow
             PhysicalXyzTraceSummaryText.Text =
                 "Trace: no verified observation session yet. 0 samples retained.";
             PhysicalXyzTraceSaveButton.IsEnabled = false;
+            PhysicalXyzTraceAssessmentText.Text =
+                "A/B assessment: insufficient evidence. Next: observe repeated XYZ values at one coordinate plateau.";
+            PhysicalXyzTraceAssessmentText.Foreground = Brushes.Khaki;
             return;
         }
 
         bool sampling = _physicalXyzWatchCancellation is { IsCancellationRequested: false };
         PhysicalXyzTraceSummaryText.Text = FormatPhysicalXyzTraceSummary(report, sampling);
+        PhysicalRiftPositionTraceAssessment assessment = PhysicalRiftPositionTraceAssessor.Assess(report);
+        PhysicalXyzTraceAssessmentText.Text = FormatPhysicalXyzTraceAssessment(assessment, sampling);
+        PhysicalXyzTraceAssessmentText.Foreground = assessment.State switch
+        {
+            PhysicalRiftPositionTraceAssessmentState.TwoCoordinatePlateausObserved => Brushes.LightGreen,
+            PhysicalRiftPositionTraceAssessmentState.Interrupted
+                or PhysicalRiftPositionTraceAssessmentState.SourceChanged
+                or PhysicalRiftPositionTraceAssessmentState.Truncated => Brushes.LightCoral,
+            _ => Brushes.Khaki
+        };
         PhysicalXyzTraceSaveButton.IsEnabled = report.TotalSamples > 0;
     }
 
@@ -501,8 +514,59 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Explicit user-only, read-only evidence export. Destination path stays offscreen;
-    /// only the validated shared exporter can publish a new, no-clobber JSON file.
+    /// Pure read-only display of the bounded A/B acquisition assessment.
+    /// A/B observations never grant producer freshness or gameplay movement authority.
+    /// </summary>
+    private static string FormatPhysicalXyzTraceAssessment(
+        PhysicalRiftPositionTraceAssessment assessment, bool sampling)
+    {
+        string prefix = "Read-only A/B (" + (sampling ? "sampling" : "HISTORICAL") + "): ";
+        string next = assessment.State switch
+        {
+            PhysicalRiftPositionTraceAssessmentState.InsufficientEvidence =>
+                "insufficient evidence. Next: establish plateau A with at least three consecutive matching native XYZ.",
+            PhysicalRiftPositionTraceAssessmentState.OneCoordinatePlateau =>
+                "one repeated coordinate plateau observed ("
+                + assessment.BaselineStableRunCount.ToString(CultureInfo.InvariantCulture)
+                + " samples). Next: acquire a different XYZ value for three consecutive samples (plateau B).",
+            PhysicalRiftPositionTraceAssessmentState.AwaitingFinalPlateau =>
+                "different XYZ value observed. Next: establish three consecutive matching samples at the final coordinate (plateau B).",
+            PhysicalRiftPositionTraceAssessmentState.Interrupted =>
+                "interrupted native observations; no A/B conclusion. Next: verified new Start with uninterrupted matching samples.",
+            PhysicalRiftPositionTraceAssessmentState.SourceChanged =>
+                "source identity changed; no A/B conclusion. Next: refresh, reselect and verify a new Start.",
+            PhysicalRiftPositionTraceAssessmentState.Truncated =>
+                "historical trace truncated; no complete A/B conclusion. Next: verified new Start with a fresh bounded trace.",
+            PhysicalRiftPositionTraceAssessmentState.TwoCoordinatePlateausObserved =>
+                "two repeated coordinate values OBSERVED: A XYZ "
+                + FormatPhysicalXyzAssessmentCoordinates(
+                    assessment.BeforeX, assessment.BeforeY, assessment.BeforeZ)
+                + " at " + (assessment.BeforeCapturedAtUtc?.ToUniversalTime()
+                    .ToString("HH:mm:ss.fff 'UTC'", CultureInfo.InvariantCulture) ?? "UTC unknown")
+                + " (+" + (assessment.BeforeMonotonicElapsedMilliseconds?.ToString(CultureInfo.InvariantCulture)
+                    ?? "?") + " ms); B XYZ "
+                + FormatPhysicalXyzAssessmentCoordinates(
+                    assessment.AfterX, assessment.AfterY, assessment.AfterZ)
+                + " at " + (assessment.AfterCapturedAtUtc?.ToUniversalTime()
+                    .ToString("HH:mm:ss.fff 'UTC'", CultureInfo.InvariantCulture) ?? "UTC unknown")
+                + " (+" + (assessment.AfterMonotonicElapsedMilliseconds?.ToString(CultureInfo.InvariantCulture)
+                    ?? "?") + " ms); distance3D "
+                + (assessment.Distance3D?.ToString("F3", CultureInfo.InvariantCulture) ?? "?")
+                + ". NOT proof of gameplay movement or passive producer freshness.",
+            _ => "unknown assessment state; no movement or producer freshness claim."
+        };
+        return prefix + next;
+    }
+
+    private static string FormatPhysicalXyzAssessmentCoordinates(
+        float? x, float? y, float? z) =>
+        (x?.ToString("F3", CultureInfo.InvariantCulture) ?? "?") + "/"
+        + (y?.ToString("F3", CultureInfo.InvariantCulture) ?? "?") + "/"
+        + (z?.ToString("F3", CultureInfo.InvariantCulture) ?? "?");
+
+    /// <summary>
+    /// The only user-triggered write path: SaveFileDialog plus validated no-clobber exporter.
+    /// No automatic trace persistence or exposure of selected destination paths.
     /// </summary>
     private void PhysicalXyzTraceSaveClicked(object sender, RoutedEventArgs e)
     {
@@ -803,6 +867,51 @@ public partial class MainWindow
                 .Contains("sampling now", StringComparison.Ordinal)
             && syntheticReport.ToJson().Contains("samples", StringComparison.OrdinalIgnoreCase);
 
+        // Construct-only A/B fixtures: three identical A and three identical B acquisitions.
+        // No native process access, game input, filesystem I/O or SaveFileDialog.
+        var abTracker = new PhysicalRiftPositionChangeTracker();
+        var abTrace = new PhysicalRiftPositionTraceRecorder(maxEntries: PhysicalXyzTraceLimit);
+        abTrace.BeginSession(123, DateTimeOffset.UnixEpoch.UtcTicks);
+        var interruptedTracker = new PhysicalRiftPositionChangeTracker();
+        var interruptedTrace = new PhysicalRiftPositionTraceRecorder(maxEntries: PhysicalXyzTraceLimit);
+        interruptedTrace.BeginSession(123, DateTimeOffset.UnixEpoch.UtcTicks);
+        for (int i = 0; i < 6; i++)
+        {
+            PhysicalRiftPositionResult step = example with
+            {
+                X = i < 3 ? 1.25f : 4.25f,
+                CapturedAtUtc = example.CapturedAtUtc.AddSeconds(i)
+            };
+            long elapsed = (i + 1L) * 1000;
+            PhysicalRiftPositionChangeSnapshot abComparison = abTracker.Observe(step, elapsed);
+            abTrace.Record(step, abComparison, elapsed, step.CapturedAtUtc);
+
+            if (i < 3)
+            {
+                PhysicalRiftPositionChangeSnapshot interruptedComparison =
+                    interruptedTracker.Observe(step, elapsed);
+                interruptedTrace.Record(step, interruptedComparison, elapsed, step.CapturedAtUtc);
+            }
+        }
+        interruptedTrace.RecordUnavailable("native_read_timeout", 4000,
+            example.CapturedAtUtc.AddSeconds(3));
+        PhysicalRiftPositionTraceAssessment positiveAssessment =
+            PhysicalRiftPositionTraceAssessor.Assess(abTrace.Snapshot());
+        PhysicalRiftPositionTraceAssessment interruptedAssessment =
+            PhysicalRiftPositionTraceAssessor.Assess(interruptedTrace.Snapshot());
+        PhysicalRiftPositionTraceAssessment emptyAssessment =
+            PhysicalRiftPositionTraceAssessor.Assess(null);
+        bool assessmentSynthetic =
+            positiveAssessment.State == PhysicalRiftPositionTraceAssessmentState.TwoCoordinatePlateausObserved
+            && FormatPhysicalXyzTraceAssessment(positiveAssessment, sampling: false)
+                .Contains("two repeated coordinate values OBSERVED", StringComparison.Ordinal)
+            && FormatPhysicalXyzTraceAssessment(positiveAssessment, sampling: false)
+                .Contains("NOT proof of gameplay movement or passive producer freshness", StringComparison.Ordinal)
+            && interruptedAssessment.State == PhysicalRiftPositionTraceAssessmentState.Interrupted
+            && FormatPhysicalXyzTraceAssessment(interruptedAssessment, sampling: false)
+                .Contains("no A/B conclusion", StringComparison.Ordinal)
+            && emptyAssessment.State == PhysicalRiftPositionTraceAssessmentState.InsufficientEvidence;
+
         bool initial = PhysicalXyzTab is not null
             && ObserverTabs.Items.IndexOf(PhysicalXyzTab) == 0
             && PhysicalXyzClientPicker is { Items.Count: 0 }
@@ -810,6 +919,7 @@ public partial class MainWindow
             && PhysicalXyzStopButton is { IsEnabled: false }
             && PhysicalXyzTraceSaveButton is { IsEnabled: false }
             && PhysicalXyzTraceSummaryText.Text.Contains("no verified observation session yet", StringComparison.Ordinal)
+            && PhysicalXyzTraceAssessmentText.Text.Contains("insufficient evidence", StringComparison.Ordinal)
             && PhysicalXyzTraceSaveStatusText.Text.Contains("Nothing saved", StringComparison.Ordinal)
             && _physicalXyzTrace is null
             && PhysicalXyzCoordinatesText?.Text == "XYZ: unavailable"
@@ -844,6 +954,6 @@ public partial class MainWindow
         ResetPhysicalXyzChangeHistory();
         bool reset = _physicalXyzChangedSamples == 0 && _physicalXyzRecentChanges.Count == 0
             && PhysicalXyzChangeHistoryText.Text == "No coordinate-value differences recorded in this session.";
-        return initial && retained && reset && traceSynthetic;
+        return initial && retained && reset && traceSynthetic && assessmentSynthetic;
     }
 }
