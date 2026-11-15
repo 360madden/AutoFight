@@ -97,6 +97,7 @@ public partial class MainWindow
 
     protected override void OnClosed(EventArgs e)
     {
+        CancelPhysicalXyzOnClose();
         CancelClientRefresh();
         base.OnClosed(e);
     }

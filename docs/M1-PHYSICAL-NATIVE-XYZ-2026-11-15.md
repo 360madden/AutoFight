@@ -1,5 +1,7 @@
 # AutoFight M1 — First live physical RIFT native XYZ
 
+> **Later same-day continuation:** [M2 read-only XYZ continuity and desktop observer](M2-PHYSICAL-XYZ-CONTINUITY-UI-2026-11-15.md) implemented the comparison tracker, 4/4 newer live acquisitions, and the first/default WPF physical XYZ tab. This M1 receipt remains the historical first-read record; see M2 for the latest tests and next acceptance gate.
+
 **Date:** November 15, 2026 (America/New_York)
 **Machine:** AMD-DESKTOP (independently identified by Workbridge)
 **Repository:** `C:\work\AutoFight`, `main`

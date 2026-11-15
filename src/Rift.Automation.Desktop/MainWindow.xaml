@@ -1,10 +1,56 @@
 <Window x:Class="Rift.Automation.Desktop.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="AutoFight - VMware 0.5.7"
+        Title="AutoFight - Physical RIFT / VMware (0.5.7)"
         Width="940" Height="740" MinWidth="720" MinHeight="560"
         Background="#101827" Foreground="#E6EDF7" Closed="OwnedTelemetryWindowClosed">
-  <TabControl x:Name="ObserverTabs" Margin="12" Background="#101827" Foreground="#E6EDF7">
+  <TabControl x:Name="ObserverTabs" SelectedIndex="0" Margin="12" Background="#101827" Foreground="#E6EDF7">
+    <TabItem x:Name="PhysicalXyzTab" Header="Physical RIFT - Live XYZ">
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="20">
+          <Border Background="#164B45" CornerRadius="8" Padding="16">
+            <StackPanel>
+              <TextBlock Text="PHYSICAL RIFT - LIVE NATIVE XYZ" FontSize="20" FontWeight="SemiBold"/>
+              <TextBlock TextWrapping="Wrap" Foreground="#D2ECE6" Margin="0,5,0,0"
+                         Text="AutoFight-owned read-only memory sampling on this Windows PC. No VMware, RR2 service, Lua addon, game input, focus changes, or automatic startup."/>
+            </StackPanel>
+          </Border>
+          <TextBlock Text="1. Refresh and select an exact local RIFT process" FontSize="16" FontWeight="SemiBold" Margin="0,18,0,8"/>
+          <Button x:Name="PhysicalXyzRefreshButton" Content="Refresh physical RIFT clients" Click="PhysicalXyzRefreshClicked"
+                  HorizontalAlignment="Left"/>
+          <TextBlock x:Name="PhysicalXyzInventorySummary" Text="Not checked. Refresh to discover physical RIFT processes."
+                     TextWrapping="Wrap" Margin="0,10,0,9" Foreground="#A9BED7"/>
+          <ListBox x:Name="PhysicalXyzClientPicker" Height="124" DisplayMemberPath="DisplayName"
+                   SelectionChanged="PhysicalXyzClientSelectionChanged"
+                   Background="#1B293E" Foreground="#E6EDF7" BorderBrush="#3A4C64"/>
+          <TextBlock x:Name="PhysicalXyzPinnedText" Text="No process selected. A fresh PID/start-time identity check is required before Start."
+                     TextWrapping="Wrap" Margin="0,9,0,0" FontFamily="Consolas"/>
+          <Border Background="#1B293E" CornerRadius="8" Padding="16" Margin="0,18,0,0">
+            <StackPanel>
+              <TextBlock Text="2. Start / stop observation" FontSize="16" FontWeight="SemiBold"/>
+              <TextBlock Text="One current-build native XYZ acquisition per second; each process read uses its own short read lease."
+                         TextWrapping="Wrap" Foreground="#A9BED7" Margin="0,5,0,10"/>
+              <StackPanel Orientation="Horizontal">
+                <Button x:Name="PhysicalXyzStartButton" Content="Start read-only XYZ" Click="PhysicalXyzStartClicked" IsEnabled="False"/>
+                <Button x:Name="PhysicalXyzStopButton" Content="Stop sampling" Click="PhysicalXyzStopClicked" IsEnabled="False" Margin="12,0,0,0"/>
+              </StackPanel>
+              <TextBlock x:Name="PhysicalXyzStatusText" Text="Stopped. No native observation requested."
+                         Foreground="#F0CD7A" TextWrapping="Wrap" Margin="0,14,0,5"/>
+              <TextBlock x:Name="PhysicalXyzCoordinatesText" Text="XYZ: unavailable" FontFamily="Consolas"
+                         FontSize="24" FontWeight="SemiBold" Margin="0,10,0,0"/>
+              <TextBlock x:Name="PhysicalXyzCandidateAgeText" Text="Candidate age: unavailable" Margin="0,8,0,0"/>
+              <TextBlock x:Name="PhysicalXyzDifferenceText" Text="Position comparison: no baseline." Margin="0,8,0,0" TextWrapping="Wrap" Foreground="#B9D5CA"/>
+              <TextBlock x:Name="PhysicalXyzCountsText" Text="Attempts: 0  |  Candidates: 0  |  Unavailable: 0  |  Identity faults: 0  |  Errors: 0"
+                         TextWrapping="Wrap" Margin="0,8,0,0" Foreground="#A9BED7"/>
+              <TextBlock x:Name="PhysicalXyzEvidenceText" Margin="0,14,0,0" TextWrapping="Wrap" Foreground="#F0CD7A"
+                         Text="NATIVE CANDIDATE ONLY - passive freshness NOT QUALIFIED; 480-second qualification NOT PASSED; gameplay input authority NONE."/>
+            </StackPanel>
+          </Border>
+          <TextBlock TextWrapping="Wrap" Foreground="#A9BED7" Margin="0,16,0,0"
+                     Text="A candidate is one newly acquired, identity-pinned memory value. Repeated candidates alone do not prove the game updated its position. Wrong process, game-build mismatch, read failure, or stopping immediately removes displayed XYZ. Sampling starts only when you explicitly click Start."/>
+        </StackPanel>
+      </ScrollViewer>
+    </TabItem>
     <TabItem x:Name="VmTab" Header="VMware RIFT labs">
       <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="20">
@@ -159,7 +205,7 @@
             </StackPanel>
           </Border>
           <TextBlock Margin="0,16,0,0" Foreground="#F0CD7A"
-                     Text="Game coordinates, facing, targeting and combat are not connected yet. This tab only inspects local rift_x64 processes. A process name does not establish executable-build compatibility." />
+                     Text="This tab only inspects local rift_x64 process metadata. For current-build read-only XYZ candidates, use the Physical RIFT - Live XYZ tab. Native candidates do not prove movement or enable control." />
           <TextBlock Margin="0,10,0,0" Foreground="#A9BED7"
                      Text="The list is a point-in-time snapshot. Refresh after starting or closing RIFT. No automatic polling, game focus changes, or VMware access." />
         </StackPanel>

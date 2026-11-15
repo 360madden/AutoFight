@@ -140,6 +140,11 @@ public partial class App : Application
             {
                 bool passed = window.RunSmokeCheck();
                 Console.WriteLine(passed ? "PASS: WPF replay construction and controls" : "FAIL: WPF replay smoke");
+                bool physicalXyzUiPassed = window.RunPhysicalXyzUiSmokeCheck();
+                Console.WriteLine(physicalXyzUiPassed
+                    ? "PASS: physical RIFT XYZ panel, pin controls, synthetic candidate formatting and comparison"
+                    : "FAIL: physical RIFT live XYZ panel");
+                passed &= physicalXyzUiPassed;
                 bool clientsPassed = await Rift.Automation.Desktop.MainWindow.RunClientSmokeCheckAsync();
                 Console.WriteLine(clientsPassed ? "PASS: client selection, errors, refresh overlap and close cancellation" : "FAIL: client controls");
                 passed &= clientsPassed;

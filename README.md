@@ -19,17 +19,18 @@
 </div>
 
 > [!IMPORTANT]
-> **AutoFight is an active development project—not a finished autonomous RIFT player.** On November 15, its own current-build native reader obtained real XYZ candidates from physical RIFT on AMD-DESKTOP without any RR2 service or gameplay input. **Passive producer freshness, matching VMware addon telemetry, sustained 480-second qualification, and measured game movement remain unverified.** The earlier Lab 2 Reader-to-host transport alone is not game data.
+> **AutoFight is an active development project—not a finished autonomous RIFT player.** On November 15, its own current-build native reader obtained real XYZ candidates from physical RIFT on AMD-DESKTOP without any RR2 service or gameplay input. The first/default desktop tab now supports explicit read-only native XYZ sampling and baseline/coordinate-difference comparisons. **Passive producer freshness, matching VMware addon telemetry, sustained 480-second qualification, and measured game movement remain unverified.** The earlier Lab 2 Reader-to-host transport alone is not game data.
 
 ## ✨ What is AutoFight?
 
-AutoFight is a modular **C# / .NET 10 / WPF** Windows project exploring a reliable, observable path from RIFT game state to independently verified actions. It is developed against two existing VMware RIFT labs. The design emphasizes **one clear owner for input**, explicit game/session identities, bounded operations, and evidence that an action actually changed the world.
+AutoFight is a modular **C# / .NET 10 / WPF** Windows project exploring a reliable, observable path from RIFT game state to independently verified actions. The physical Windows RIFT client on AMD-DESKTOP is the current read-only XYZ target; earlier VMware lab integrations remain available as separate historical/development paths. The design emphasizes **one clear owner for input**, explicit game/session identities, bounded operations, and evidence that an action actually changed the world.
 
 | 🧩 Component | Purpose | Current implementation |
 | :--- | :--- | :--- |
-| 🖥️ **Desktop workbench** | On-demand process inventory, diagnostics, offline replay, telemetry view | WPF UI and CLI commands |
+| 🖥️ **Desktop workbench** | On-demand physical RIFT XYZ, identity-pinned comparisons, VM diagnostics and replay | First/default physical XYZ WPF tab and CLI commands |
 | 🧠 **Core engine** | Typed observations, freshness, event continuity, deterministic analysis | Standalone .NET library with regression tests |
 | 📡 **Host receiver** | Accept authenticated, identity-bound updates from a guest | Independent AutoFight in-process listener and watch CLI |
+| 📍 **Physical native XYZ** | Read current-build RIFT memory, classify consecutive coordinates | Exact-process C# read-only reader + pure comparison tracker; no game input |
 | 🕵️ **GuestReader** | Inspect the pinned RIFT process for addon-produced frames | AutoFight-owned Windows executable and scanner |
 | 🌙 **RIFT Lua addon** | Emit identifiable game observations within permitted addon APIs | Six source-controlled Lua assets |
 | 🕹️ **Control foundation** | Preflight, ownership, bounded pulse and response attribution | Legacy supervised bridge and synthetic executor; *no verified game motion* |
@@ -49,7 +50,8 @@ AutoFight is a modular **C# / .NET 10 / WPF** Windows project exploring a reliab
 | Fresh XYZ from matched addon frame | 🔴 | 40/40 host polls unavailable; Reader reported no matching frame |
 | 480-second continuous telemetry | 🔴 | Acceptance logic exists; no AutoFight-owned live passing result |
 | Actual controlled movement with XYZ change | 🔴 | No verified input-to-position feedback loop |
-| Physical native read-only XYZ provider | 🟢 | AutoFight-owned exact-build C# reader acquired actual physical RIFT XYZ twice on Nov 15; candidates only, not passive-freshness qualified |
+| Physical native read-only XYZ provider | 🟢 | AutoFight-owned exact-build C# reader acquired actual physical RIFT XYZ repeatedly on Nov 15; 4/4 samples in the latest watch, all candidate-only |
+| Physical XYZ WPF and coordinate comparisons | 🟢 | First/default on-demand tab, fail-closed stale/identity checks, Baseline/Unchanged/Changed deltas; 7 synthetic smoke categories passed, not a visible UI test |
 | Targeting, navigation, spell rotation | 🔴 | Future work; no qualified autonomous combat |
 
 **Interpreting the evidence:** A network-delivered Reader status is **not** necessarily a game telemetry frame. A game input acknowledgment is **not** proof the character moved. The project deliberately records these as separate acceptance gates.
@@ -65,7 +67,8 @@ flowchart TD
     V --> C["🧠 Core continuity + evidence rules"]
     C -. "Future qualified feedback loop" .-> A["🕹️ Bounded input controller"]
     A -. "Only after explicit readiness" .-> G
-    N["🧭 Native XYZ candidate (planned)"] -. "Alternative read-only provider" .-> C
+    P["🎮 Physical RIFT on AMD-DESKTOP"] --> N["🧭 Native XYZ reader"]
+    N -->|"Read-only candidate and coordinate deltas"| V
 ```
 
 - **Process and build identity:** measurements must match the correct game image, process start, lab, and Reader instance.
@@ -116,7 +119,9 @@ dotnet run --project .\src\Rift.Automation.Desktop\Rift.Automation.Desktop.cspro
 dotnet run --project .\src\Rift.Automation.Desktop\Rift.Automation.Desktop.csproj -c Release -- --physical-xyz-watch <pid> <start-utc-ticks> 5
 ```
 
-The executable's SHA-256 must exactly match the pinned current-build recipe. An accepted `Candidate` means an anchored, newly acquired memory reading—not independently proven producer freshness, movement, or permission to automate. The watch is explicitly bounded and does not control RIFT. See the [November 15 native XYZ evidence](docs/M1-PHYSICAL-NATIVE-XYZ-2026-11-15.md).
+The executable's SHA-256 must exactly match the pinned current-build recipe. An accepted `Candidate` means an anchored, newly acquired memory reading—not independently proven producer freshness, movement, or permission to automate. The watch is explicitly bounded, emits **Baseline/Unchanged/Changed** coordinate comparisons and 3D deltas, and never controls RIFT.
+
+For the on-demand desktop observer, launch AutoFight without CLI arguments. In the first tab **Physical RIFT – Live XYZ**, click **Refresh physical RIFT clients**, select the exact RIFT process, then **Start read-only XYZ**; use **Stop sampling** to cancel. The desktop acquires about once per second, clears stale or invalid coordinates and never moves or focuses the game. The tab's synthetic smoke has passed; a visible interactive click-through remains outstanding. See the [first native XYZ evidence](docs/M1-PHYSICAL-NATIVE-XYZ-2026-11-15.md) and [live comparison/desktop milestone](docs/M2-PHYSICAL-XYZ-CONTINUITY-UI-2026-11-15.md).
 
 ### 📦 Optional self-contained desktop build
 
@@ -131,7 +136,7 @@ This creates a local unsigned executable—not a GitHub release or installer. Th
 | Priority | Milestone | Acceptance target |
 | :---: | :--- | :--- |
 | **P1** | First trustworthy Lab 2 XYZ | Prove addon loaded/bound and host receives fresh, identity-matched position |
-| **P2** | Native XYZ freshness qualification | Standalone exact-build reader and first live physical candidate achieved Nov 15; next verify passive source refresh and scene/actor continuity |
+| **P2** | Physical XYZ comparison and freshness qualification | Native reader, coordinate comparison and desktop observer implemented Nov 15; next observe a user-driven position change, visible UI behavior and independent producer freshness |
 | **P3** | Freshness and movement verification | Sustain the 480-second window; separately observe one reviewed small movement pulse |
 | **P4** | Standalone input path | Remove the remaining legacy controller runtime requirement |
 | **P5** | Navigation and combat | Add target/ability state, movement planning, collision/LOS and recovery only on qualified feedback |
@@ -142,6 +147,7 @@ This creates a local unsigned executable—not a GitHub release or installer. Th
 | :--- | :--- |
 | [Session handoff](SESSION_HANDOFF.md) | Most recent continuation links and repository routing |
 | [Current status](docs/current-status.md) | Verified implementation, test receipts, and outstanding gates |
+| [Live physical XYZ continuity + WPF milestone](docs/M2-PHYSICAL-XYZ-CONTINUITY-UI-2026-11-15.md) | Latest 4/4 read-only watch, comparison semantics, 333 tests and desktop scope |
 | [Lab 2 first-XYZ handoff](docs/HANDOFF-AUTOFIGHT-LAB2-FIRST-XYZ-2026-11-06.md) | Exact source/Reader transport outcome and next lab steps |
 | [Architecture](docs/automation-platform-architecture.md) | Contracts, identity, state and provider arbitration |
 | [Roadmap](docs/automation-platform-roadmap.md) | Development milestones and acceptance gates |
