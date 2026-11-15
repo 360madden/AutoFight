@@ -15,7 +15,7 @@ public partial class App : Application
         if (e.Args is ["--help"])
         {
             Console.WriteLine("AutoFight 0.5.7 - standalone VMware diagnostics and supervised legacy tools");
-            Console.WriteLine("Usage: Rift.Automation.Desktop [--owned-telemetry <private-config.local.json> <seconds> | --owned-qualify-telemetry <private-config.local.json> | --vm-feedback <source-pin> | --vm-watch <source-pin> <seconds> | --vm-qualify-feedback <lab> <source-pin> | --vm-status <config> | --vm-preflight <lab> <source-pin> <config> | --vm-pulse <lab> <source-pin> <config> <lease> <arm> <key> <hold-ms> | --clients | --physical-xyz <pid> <start-utc-ticks> | --physical-xyz-watch <pid> <start-utc-ticks> <seconds> | --inspect-unit <file> | --replay <file> | --smoke-test | --help]");
+            Console.WriteLine("Usage: Rift.Automation.Desktop [--owned-telemetry <private-config.local.json> <seconds> | --owned-qualify-telemetry <private-config.local.json> | --vm-feedback <source-pin> | --vm-watch <source-pin> <seconds> | --vm-qualify-feedback <lab> <source-pin> | --vm-status <config> | --vm-preflight <lab> <source-pin> <config> | --vm-pulse <lab> <source-pin> <config> <lease> <arm> <key> <hold-ms> | --clients | --physical-xyz <pid> <start-utc-ticks> | --physical-xyz-watch <pid> <start-utc-ticks> <seconds> | --physical-xyz-trace-assess <saved-json-file> | --inspect-unit <file> | --replay <file> | --smoke-test | --help]");
             Console.WriteLine("VM controls use an existing supervised controller on localhost; no automatic arming.");
             Console.WriteLine("--vm-preflight checks current selected-lab identity/readiness; no input or authorization artifacts.");
             Console.WriteLine("--vm-qualify-feedback checks 480s pinned telemetry with every progress gap strictly below 4500ms; no input or controller contact.");
@@ -25,6 +25,7 @@ public partial class App : Application
             Console.WriteLine("--clients lists local RIFT process metadata as JSON without opening a window.");
             Console.WriteLine("--physical-xyz takes an exact PID and process-creation UTC ticks from --clients; read-only current-build native XYZ candidate, not sustained qualification.");
             Console.WriteLine("--physical-xyz-watch repeats pinned read-only acquisitions approximately every second for 2-30s; repeating equal XYZ does not prove passive freshness.");
+            Console.WriteLine("--physical-xyz-trace-assess reads and validates a previously exported bounded historical JSON trace and reports its A/B assessment; no RIFT process access or input.");
             Console.WriteLine("--inspect-unit reads one manual RAC-TSV/1 snapshot file, not live telemetry.");
             Console.WriteLine("Native XYZ is read-only and candidate-only; sustained freshness and any movement/input require separate acceptance.");
             Shutdown(0);
@@ -60,6 +61,12 @@ public partial class App : Application
         if (e.Args is ["--physical-xyz", string physicalPid, string physicalStartTicks])
         {
             Shutdown(await RunPhysicalXyzAsync(physicalPid, physicalStartTicks));
+            return;
+        }
+
+        if (e.Args is ["--physical-xyz-trace-assess", string savedTracePath])
+        {
+            Shutdown(RunHistoricalPhysicalXyzAssessment(savedTracePath));
             return;
         }
 
@@ -177,6 +184,88 @@ public partial class App : Application
         if (e.Args is ["--replay", _]) window.ShowReplay();
         ShutdownMode = ShutdownMode.OnMainWindowClose;
         window.Show();
+    }
+
+    /// <summary>
+    /// Offline assessment of a previously exported, strictly validated M4 XYZ evidence file.
+    /// This command has no native/game process or UI access and cannot authorize input.
+    /// </summary>
+    private static int RunHistoricalPhysicalXyzAssessment(string savedTracePath)
+    {
+        try
+        {
+            PhysicalRiftPositionTraceReport report =
+                PhysicalRiftPositionTraceImporter.Load(savedTracePath);
+            PhysicalRiftPositionTraceAssessment result =
+                PhysicalRiftPositionTraceAssessor.Assess(report);
+
+            var before = result.BeforeX is float bx &&
+                result.BeforeY is float by && result.BeforeZ is float bz
+                    ? new
+                    {
+                        x = bx,
+                        y = by,
+                        z = bz,
+                        capturedAtUtc = result.BeforeCapturedAtUtc,
+                        monotonicElapsedMilliseconds = result.BeforeMonotonicElapsedMilliseconds
+                    }
+                    : null;
+            var after = result.AfterX is float ax &&
+                result.AfterY is float ay && result.AfterZ is float az
+                    ? new
+                    {
+                        x = ax,
+                        y = ay,
+                        z = az,
+                        capturedAtUtc = result.AfterCapturedAtUtc,
+                        monotonicElapsedMilliseconds = result.AfterMonotonicElapsedMilliseconds
+                    }
+                    : null;
+
+            Console.WriteLine(JsonSerializer.Serialize(new
+            {
+                schema = "autofight-physical-xyz-trace-assessment/1",
+                origin = "ImportedHistoricalFile",
+                sourceSchema = report.Schema,
+                sourceProcessId = report.ProcessId,
+                sourceProcessStartUtcTicks = report.ProcessStartUtcTicks,
+                sourceExecutableSha256 = report.ExecutableSha256,
+                sourcePlayerUnitKey = report.PlayerUnitKey?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                state = result.State.ToString(),
+                reasonCode = result.ReasonCode,
+                acceptedSamples = result.AcceptedSamples,
+                rejectedSamples = result.RejectedSamples,
+                baselineStableRunCount = result.BaselineStableRunCount,
+                finalStableRunCount = result.FinalStableRunCount,
+                before,
+                after,
+                distance3D = result.Distance3D,
+                passiveFreshnessQualified = false,
+                gameplayMovementProven = false,
+                canAutomate = false,
+                evidenceNote = "Historical saved coordinates only; no authenticated provenance, passive producer freshness, caused gameplay movement, or input authority."
+            }));
+            // An incomplete/interrupted/truncated but well-formed historical report is
+            // valid input. Only malformed/untrusted files make the command fail.
+            return 0;
+        }
+        catch (Exception error) when (error is ArgumentException or
+            InvalidDataException or IOException or UnauthorizedAccessException or
+            JsonException or NotSupportedException)
+        {
+            // Never echo a selected path, raw JSON, exception text or arbitrary file data.
+            string reason = error switch
+            {
+                ArgumentException => "invalid_path",
+                UnauthorizedAccessException => "access_denied",
+                JsonException => "invalid_json",
+                InvalidDataException => "invalid_trace",
+                NotSupportedException => "unsupported_trace",
+                _ => "file_unavailable"
+            };
+            Console.Error.WriteLine("Historical physical XYZ trace rejected: " + reason);
+            return 2;
+        }
     }
 
     private static async Task<int> RunOwnedTelemetryAsync(string configPath, string durationText)
