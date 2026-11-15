@@ -15,7 +15,7 @@ public partial class App : Application
         if (e.Args is ["--help"])
         {
             Console.WriteLine("AutoFight 0.5.7 - standalone VMware diagnostics and supervised legacy tools");
-            Console.WriteLine("Usage: Rift.Automation.Desktop [--owned-telemetry <private-config.local.json> <seconds> | --owned-qualify-telemetry <private-config.local.json> | --vm-feedback <source-pin> | --vm-watch <source-pin> <seconds> | --vm-qualify-feedback <lab> <source-pin> | --vm-status <config> | --vm-preflight <lab> <source-pin> <config> | --vm-pulse <lab> <source-pin> <config> <lease> <arm> <key> <hold-ms> | --clients | --physical-xyz <pid> <start-utc-ticks> | --physical-xyz-watch <pid> <start-utc-ticks> <seconds> | --physical-xyz-trace-assess <saved-json-file> | --inspect-unit <file> | --replay <file> | --smoke-test | --help]");
+            Console.WriteLine("Usage: Rift.Automation.Desktop [--owned-telemetry <private-config.local.json> <seconds> | --owned-qualify-telemetry <private-config.local.json> | --vm-feedback <source-pin> | --vm-watch <source-pin> <seconds> | --vm-qualify-feedback <lab> <source-pin> | --vm-status <config> | --vm-preflight <lab> <source-pin> <config> | --vm-pulse <lab> <source-pin> <config> <lease> <arm> <key> <hold-ms> | --clients | --physical-xyz <pid> <start-utc-ticks> | --physical-xyz-watch <pid> <start-utc-ticks> <seconds> | --physical-xyz-trace-capture <pid> <start-utc-ticks> <seconds> <new-output.json> | --physical-xyz-trace-assess <saved-json-file> | --inspect-unit <file> | --replay <file> | --smoke-test | --help]");
             Console.WriteLine("VM controls use an existing supervised controller on localhost; no automatic arming.");
             Console.WriteLine("--vm-preflight checks current selected-lab identity/readiness; no input or authorization artifacts.");
             Console.WriteLine("--vm-qualify-feedback checks 480s pinned telemetry with every progress gap strictly below 4500ms; no input or controller contact.");
@@ -25,6 +25,7 @@ public partial class App : Application
             Console.WriteLine("--clients lists local RIFT process metadata as JSON without opening a window.");
             Console.WriteLine("--physical-xyz takes an exact PID and process-creation UTC ticks from --clients; read-only current-build native XYZ candidate, not sustained qualification.");
             Console.WriteLine("--physical-xyz-watch repeats pinned read-only acquisitions approximately every second for 2-30s; repeating equal XYZ does not prove passive freshness.");
+            Console.WriteLine("--physical-xyz-trace-capture explicitly records 10..120s of read-only native XYZ into a NEW no-overwrite historical JSON file; user moves manually, never the program.");
             Console.WriteLine("--physical-xyz-trace-assess reads and validates a previously exported bounded historical JSON trace and reports its A/B assessment; no RIFT process access or input.");
             Console.WriteLine("--inspect-unit reads one manual RAC-TSV/1 snapshot file, not live telemetry.");
             Console.WriteLine("Native XYZ is read-only and candidate-only; sustained freshness and any movement/input require separate acceptance.");
@@ -55,6 +56,14 @@ public partial class App : Application
         if (e.Args is ["--physical-xyz-watch", string watchPid, string watchStartTicks, string watchSeconds])
         {
             Shutdown(await RunPhysicalXyzWatchAsync(watchPid, watchStartTicks, watchSeconds));
+            return;
+        }
+
+        if (e.Args is ["--physical-xyz-trace-capture", string capturePid, string captureStartTicks,
+            string captureSeconds, string captureOutput])
+        {
+            Shutdown(await RunPhysicalXyzTraceCaptureAsync(capturePid, captureStartTicks,
+                captureSeconds, captureOutput));
             return;
         }
 

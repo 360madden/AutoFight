@@ -113,6 +113,7 @@ PhysicalRiftPositionChangeSpecs.Run(Test, Check);
 PhysicalRiftPositionTraceSpecs.Run(Test, Check);
 PhysicalRiftPositionTraceExportSpecs.Run(Test, Check);
 PhysicalRiftPositionTraceImportSpecs.Run(Test, Check);
+PhysicalRiftPositionTraceCaptureSpecs.Run(Test, Check);
 PhysicalRiftPositionTraceAssessmentSpecs.Run(Test, Check);
 VmTelemetryWatchSpecs.Run(Test, Check);
 VmPulseObservationSpecs.Run(Test, Check);

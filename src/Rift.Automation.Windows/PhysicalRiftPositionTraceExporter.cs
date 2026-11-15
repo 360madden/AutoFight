@@ -101,6 +101,29 @@ public static class PhysicalRiftPositionTraceExporter
         }
     }
 
+    /// <summary>
+    /// Validates an explicitly selected NEW local-drive JSON destination before any
+    /// capture or native process access. This check is advisory: SaveNew still performs
+    /// its final atomic no-clobber rename to reject files created in the meantime.
+    /// </summary>
+    public static void CheckNewDestination(string selectedPath)
+    {
+        string destination = ResolveOrdinaryJsonDestination(selectedPath);
+        string canonical = destination.Replace('/', '\\');
+        if (canonical.Length < 4 || !char.IsAsciiLetter(canonical[0]) ||
+            canonical[1] != ':' || canonical[2] != '\\')
+            throw new ArgumentException("Choose an absolute local-drive JSON filename.",
+                nameof(selectedPath));
+
+        string parent = Path.GetDirectoryName(destination)
+            ?? throw new ArgumentException("JSON destination has no parent directory.",
+                nameof(selectedPath));
+        if (!Directory.Exists(parent))
+            throw new DirectoryNotFoundException("JSON destination directory does not exist.");
+        if (File.Exists(destination) || Directory.Exists(destination))
+            throw new IOException("The JSON destination already exists. Select a new filename.");
+    }
+
     private static string ResolveOrdinaryJsonDestination(string selectedPath)
     {
         if (string.IsNullOrWhiteSpace(selectedPath) || selectedPath.Length > 32_000)
