@@ -60,7 +60,24 @@
                             Background="#101827" BorderBrush="#3A4C64"/>
                  </StackPanel>
                </Border>
-               <TextBlock x:Name="PhysicalXyzEvidenceText" Margin="0,14,0,0" TextWrapping="Wrap" Foreground="#F0CD7A"
+               <Border BorderBrush="#476183" BorderThickness="1" Padding="12" Margin="0,12,0,0" CornerRadius="6">
+                  <StackPanel>
+                    <TextBlock Text="BOUNDED READ-ONLY XYZ TRACE" FontWeight="SemiBold" Foreground="#A9D7F0"/>
+                    <TextBlock x:Name="PhysicalXyzTraceSummaryText"
+                               Text="Trace: no verified observation session yet. 0 samples retained."
+                               Margin="0,6,0,0" TextWrapping="Wrap" Foreground="#C9D8F0"/>
+                    <TextBlock Text="Retains up to 600 read outcomes (including unavailable/error) after Stop or an identity fault. A verified new Start replaces the old trace. No automatic file writes."
+                               TextWrapping="Wrap" Margin="0,5,0,9" Foreground="#A9BED7"/>
+                    <Button x:Name="PhysicalXyzTraceSaveButton" Content="Save read-only trace…" Click="PhysicalXyzTraceSaveClicked"
+                            IsEnabled="False" HorizontalAlignment="Left"/>
+                    <TextBlock x:Name="PhysicalXyzTraceSaveStatusText"
+                               Text="Nothing saved. Use Save to create a new JSON file; existing files are never overwritten."
+                               TextWrapping="Wrap" Margin="0,7,0,0" Foreground="#A9BED7"/>
+                    <TextBlock Text="HISTORICAL ACQUISITION EVIDENCE ONLY — not proof of passive producer freshness or gameplay movement. Never grants input authority."
+                               TextWrapping="Wrap" Margin="0,7,0,0" Foreground="#F0CD7A"/>
+                  </StackPanel>
+                </Border>
+                <TextBlock x:Name="PhysicalXyzEvidenceText" Margin="0,14,0,0" TextWrapping="Wrap" Foreground="#F0CD7A"
                          Text="NATIVE CANDIDATE ONLY - passive freshness NOT QUALIFIED; 480-second qualification NOT PASSED; gameplay input authority NONE."/>
             </StackPanel>
           </Border>

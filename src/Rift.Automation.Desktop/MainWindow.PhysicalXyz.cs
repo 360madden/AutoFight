@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.IO;
+using System.Text;
+using Microsoft.Win32;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -21,6 +24,9 @@ public partial class MainWindow
     private DispatcherTimer? _physicalXyzAgeTimer;
     private PhysicalRiftPositionResult? _physicalXyzVisibleCandidate;
     private PhysicalRiftPositionChangeTracker? _physicalXyzComparison;
+    private PhysicalRiftPositionTraceRecorder? _physicalXyzTrace;
+    // Stopwatch is local to each explicitly started observation session.
+    private const int PhysicalXyzTraceLimit = 600;
     private ulong? _physicalXyzPinnedPlayerKey;
     private bool _physicalXyzStartPending;
     private bool _physicalXyzClosing;
@@ -196,6 +202,12 @@ public partial class MainWindow
 
             _physicalXyzPinnedPlayerKey = null;
             _physicalXyzComparison = new PhysicalRiftPositionChangeTracker(maxObservations: 3600);
+            // A new trace epoch begins only after the exact PID/start/path preflight passes.
+            // Previous trace evidence remains available if Start was denied or cancelled.
+            _physicalXyzTrace = new PhysicalRiftPositionTraceRecorder(maxEntries: PhysicalXyzTraceLimit);
+            _physicalXyzTrace.BeginSession(processId, startTicks);
+            PhysicalXyzTraceSaveStatusText.Text = "New read-only trace session. Nothing has been saved to disk.";
+            UpdatePhysicalXyzTraceSummary();
             _physicalXyzAttempts = 0;
             _physicalXyzCandidates = 0;
             _physicalXyzUnavailable = 0;
@@ -249,6 +261,7 @@ public partial class MainWindow
     {
         string ending = "Stopped by user. No gameplay input was sent.";
         var watch = Stopwatch.StartNew();
+        // The same monotonic clock drives the comparison and trace.
         try
         {
             while (!owner.IsCancellationRequested && !_closing && !_physicalXyzClosing)
@@ -269,6 +282,19 @@ public partial class MainWindow
 
                     if (!CanShowPhysicalXyzSample(owner))
                         return;
+
+                    // Capture every returned native result before any terminal rejection/early break.
+                    // The trace recorder nulls rejected XYZ and pins identity independently.
+                    long observedAtMs = watch.ElapsedMilliseconds;
+                    DateTimeOffset observedAtUtc = DateTimeOffset.UtcNow;
+                    bool candidateUsable = ValidPhysicalXyzCandidate(sample, observedAtUtc);
+                    PhysicalRiftPositionResult comparisonCandidate =
+                        sample.Status == PhysicalRiftPositionStatus.Candidate && !candidateUsable
+                            ? sample with { X = null, Y = null, Z = null }
+                            : sample;
+                    PhysicalRiftPositionChangeSnapshot comparison =
+                        _physicalXyzComparison!.Observe(comparisonCandidate, observedAtMs);
+                    RecordPhysicalXyzTrace(sample, comparison, observedAtMs, observedAtUtc);
 
                     if (sample.ProcessId != processId || sample.ProcessStartUtcTicks != startTicks)
                     {
@@ -291,10 +317,9 @@ public partial class MainWindow
                     }
 
                     if (sample.Status == PhysicalRiftPositionStatus.Candidate
-                        && ValidPhysicalXyzCandidate(sample))
+                        && candidateUsable)
                     {
-                        PhysicalRiftPositionChangeSnapshot comparison = _physicalXyzComparison!.Observe(
-                            sample, watch.ElapsedMilliseconds);
+                        // This comparison was already observed and recorded for this read.
                         if (comparison.Status is PhysicalRiftPositionChangeStatus.IdentityChanged
                             or PhysicalRiftPositionChangeStatus.StaleAcquisitionGap
                             or PhysicalRiftPositionChangeStatus.OutOfOrder
@@ -327,7 +352,7 @@ public partial class MainWindow
                         _physicalXyzPinnedPlayerKey = sample.PlayerUnitKey;
                         _physicalXyzCandidates++;
                         _physicalXyzVisibleCandidate = sample;
-                        PhysicalXyzCoordinatesText.Text = FormatPhysicalXyzCandidate(sample);
+                        PhysicalXyzCoordinatesText.Text = FormatPhysicalXyzCandidate(sample, candidateUsable);
                         PhysicalXyzStatusText.Text =
                             "Native XYZ candidate acquired from exact current-build process. "
                             + "Producer freshness and movement are NOT qualified.";
@@ -339,7 +364,7 @@ public partial class MainWindow
                     }
                     else if (sample.Status == PhysicalRiftPositionStatus.Candidate)
                     {
-                        _physicalXyzComparison?.Observe(sample, watch.ElapsedMilliseconds);
+                        // Comparison and outcome were already recorded before status classification.
                         _physicalXyzErrors++;
                         ApplyPhysicalXyzNonCandidate(
                             "Rejected an inconsistent or incorrectly pinned native candidate.",
@@ -347,7 +372,7 @@ public partial class MainWindow
                     }
                     else
                     {
-                        _physicalXyzComparison?.Observe(sample, watch.ElapsedMilliseconds);
+                        // Comparison and outcome were already recorded before status classification.
                         if (sample.Status == PhysicalRiftPositionStatus.Error)
                             _physicalXyzErrors++;
                         else
@@ -366,6 +391,7 @@ public partial class MainWindow
                     if (!CanShowPhysicalXyzSample(owner))
                         return;
                     _physicalXyzUnavailable++;
+                    RecordPhysicalXyzUnavailable("native_read_timeout", watch.ElapsedMilliseconds);
                     _physicalXyzComparison?.Reset();
                     ApplyPhysicalXyzNonCandidate("Native read exceeded its 15-second deadline.", Brushes.Khaki);
                 }
@@ -374,6 +400,7 @@ public partial class MainWindow
                     if (!CanShowPhysicalXyzSample(owner))
                         return;
                     _physicalXyzErrors++;
+                    RecordPhysicalXyzUnavailable("native_read_exception", watch.ElapsedMilliseconds);
                     _physicalXyzComparison?.Reset();
                     ApplyPhysicalXyzNonCandidate("Native acquisition failed unexpectedly; no XYZ accepted.",
                         Brushes.LightCoral);
@@ -399,6 +426,7 @@ public partial class MainWindow
             {
                 _physicalXyzWatchCancellation = null;
                 _physicalXyzWatchTask = null;
+                // Historical trace remains after the sampling clock stops.
                 _physicalXyzPinnedPlayerKey = null;
                 _physicalXyzComparison?.Cancel();
                 _physicalXyzComparison = null;
@@ -414,13 +442,179 @@ public partial class MainWindow
                     UpdatePhysicalXyzCounters();
                     UpdatePhysicalXyzStartAvailability();
                 }
+                // The bounded historical trace intentionally survives Stop and faults.
+                UpdatePhysicalXyzTraceSummary();
             }
             else
                 owner.Dispose();
         }
     }
 
+    private void RecordPhysicalXyzTrace(
+        PhysicalRiftPositionResult sample, PhysicalRiftPositionChangeSnapshot comparison,
+        long monotonicElapsedMilliseconds, DateTimeOffset observedAtUtc)
+    {
+        _physicalXyzTrace?.Record(sample, comparison, monotonicElapsedMilliseconds, observedAtUtc);
+        UpdatePhysicalXyzTraceSummary();
+    }
+
+    private void RecordPhysicalXyzUnavailable(string safeReason, long monotonicElapsedMilliseconds)
+    {
+        _physicalXyzTrace?.RecordUnavailable(
+            safeReason, monotonicElapsedMilliseconds, DateTimeOffset.UtcNow);
+        UpdatePhysicalXyzTraceSummary();
+    }
+
+    private void UpdatePhysicalXyzTraceSummary()
+    {
+        if (_closing || _physicalXyzClosing || PhysicalXyzTraceSummaryText is null)
+            return;
+
+        PhysicalRiftPositionTraceReport? report = _physicalXyzTrace?.Snapshot();
+        if (report is null)
+        {
+            PhysicalXyzTraceSummaryText.Text =
+                "Trace: no verified observation session yet. 0 samples retained.";
+            PhysicalXyzTraceSaveButton.IsEnabled = false;
+            return;
+        }
+
+        bool sampling = _physicalXyzWatchCancellation is { IsCancellationRequested: false };
+        PhysicalXyzTraceSummaryText.Text = FormatPhysicalXyzTraceSummary(report, sampling);
+        PhysicalXyzTraceSaveButton.IsEnabled = report.TotalSamples > 0;
+    }
+
+    private static string FormatPhysicalXyzTraceSummary(
+        PhysicalRiftPositionTraceReport report, bool sampling)
+    {
+        return "Trace (" + (sampling ? "sampling now" : "HISTORICAL after Stop/fault")
+            + "): total native outcomes " + report.TotalSamples.ToString(CultureInfo.InvariantCulture)
+            + ", retained " + report.RetainedSamples.ToString(CultureInfo.InvariantCulture)
+            + "/" + PhysicalXyzTraceLimit.ToString(CultureInfo.InvariantCulture)
+            + ", evicted " + report.EvictedSamples.ToString(CultureInfo.InvariantCulture)
+            + ", candidates " + report.CandidateSamples.ToString(CultureInfo.InvariantCulture)
+            + ", changes " + report.ChangedSamples.ToString(CultureInfo.InvariantCulture)
+            + ", unavailable " + report.UnavailableSamples.ToString(CultureInfo.InvariantCulture)
+            + ". Pinned PID " + (report.ProcessId?.ToString(CultureInfo.InvariantCulture) ?? "pending")
+            + ", start UTC ticks " + (report.ProcessStartUtcTicks?.ToString(CultureInfo.InvariantCulture) ?? "pending")
+            + ", player key " + (report.PlayerUnitKey?.ToString(CultureInfo.InvariantCulture) ?? "pending")
+            + ". Producer freshness/gameplay movement NOT proven.";
+    }
+
+    /// <summary>
+    /// Explicit user-only, read-only evidence export. Destination path stays offscreen;
+    /// only atomic, no-clobber publication can produce a final JSON file.
+    /// </summary>
+    private void PhysicalXyzTraceSaveClicked(object sender, RoutedEventArgs e)
+    {
+        if (_closing || _physicalXyzClosing)
+            return;
+        PhysicalRiftPositionTraceReport? snapshot = _physicalXyzTrace?.Snapshot();
+        if (snapshot is null || snapshot.TotalSamples == 0)
+        {
+            PhysicalXyzTraceSaveStatusText.Text = "No trace outcomes to save.";
+            return;
+        }
+
+        try
+        {
+            var dialog = new SaveFileDialog
+            {
+                Title = "Save historical read-only physical XYZ trace (new file)",
+                Filter = "JSON trace (*.json)|*.json",
+                DefaultExt = ".json",
+                AddExtension = true,
+                OverwritePrompt = false,
+                CheckPathExists = true,
+                FileName = "autofight-physical-xyz-"
+                    + DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)
+                    + ".json"
+            };
+            if (dialog.ShowDialog(this) != true)
+            {
+                PhysicalXyzTraceSaveStatusText.Text =
+                    "Save cancelled; the trace remains available in memory.";
+                return;
+            }
+
+            WritePhysicalXyzTraceNewFile(dialog.FileName, snapshot.ToJson());
+            PhysicalXyzTraceSaveStatusText.Text = "Saved a new JSON file with "
+                + snapshot.RetainedSamples.ToString(CultureInfo.InvariantCulture)
+                + " retained read-only outcomes. Historical evidence only; no producer freshness or movement proof.";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+            or ArgumentException or InvalidOperationException or NotSupportedException
+            or System.Security.SecurityException)
+        {
+            PhysicalXyzTraceSaveStatusText.Text =
+                "Save failed or destination exists. Choose a new JSON filename; no existing file was replaced.";
+        }
+    }
+
+    private static void WritePhysicalXyzTraceNewFile(string selectedPath, string json)
+    {
+        if (string.IsNullOrWhiteSpace(selectedPath) || !Path.IsPathFullyQualified(selectedPath)
+            || !string.Equals(Path.GetExtension(selectedPath), ".json", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("An absolute JSON destination is required.", nameof(selectedPath));
+
+        if (selectedPath.StartsWith(@"\\?\", StringComparison.Ordinal)
+            || selectedPath.StartsWith(@"\\.\", StringComparison.Ordinal))
+            throw new ArgumentException("An ordinary absolute path is required.", nameof(selectedPath));
+
+        string destination = Path.GetFullPath(selectedPath);
+        string fileName = Path.GetFileName(destination);
+        string stem = Path.GetFileNameWithoutExtension(fileName);
+        if (fileName.Contains(':', StringComparison.Ordinal) || string.IsNullOrWhiteSpace(stem)
+            || IsReservedPhysicalXyzTraceStem(stem))
+            throw new ArgumentException("An ordinary JSON filename is required.", nameof(selectedPath));
+        string parent = Path.GetDirectoryName(destination)
+            ?? throw new ArgumentException("A destination directory is required.", nameof(selectedPath));
+        if (!Directory.Exists(parent))
+            throw new DirectoryNotFoundException("Destination directory unavailable.");
+
+        // Stage in the selected directory, then publish without ever replacing an
+        // existing destination. A failed write cannot leave a partial final JSON.
+        string staging = Path.Combine(parent,
+            "." + fileName + "." + Guid.NewGuid().ToString("N") + ".tmp");
+        bool ownsStaging = false;
+        try
+        {
+            byte[] bytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(json);
+            using (var file = new FileStream(staging, FileMode.CreateNew,
+                FileAccess.Write, FileShare.None))
+            {
+                ownsStaging = true;
+                file.Write(bytes);
+                file.Flush(flushToDisk: true);
+            }
+            File.Move(staging, destination, overwrite: false);
+            ownsStaging = false;
+        }
+        finally
+        {
+            if (ownsStaging)
+            {
+                try { File.Delete(staging); }
+                catch (IOException) { /* Never remove an existing destination. */ }
+                catch (UnauthorizedAccessException) { /* Preserve original failure. */ }
+            }
+        }
+    }
+
+    private static bool IsReservedPhysicalXyzTraceStem(string stem)
+    {
+        string upper = stem.ToUpperInvariant();
+        return upper is "CON" or "PRN" or "AUX" or "NUL"
+            || (upper.Length == 4 && upper[3] is >= '1' and <= '9'
+                && (upper.StartsWith("COM", StringComparison.Ordinal)
+                    || upper.StartsWith("LPT", StringComparison.Ordinal)));
+    }
+
     private static bool ValidPhysicalXyzCandidate(PhysicalRiftPositionResult sample) =>
+        ValidPhysicalXyzCandidate(sample, DateTimeOffset.UtcNow);
+
+    private static bool ValidPhysicalXyzCandidate(
+        PhysicalRiftPositionResult sample, DateTimeOffset observedAtUtc) =>
         sample.Status == PhysicalRiftPositionStatus.Candidate
         && string.Equals(sample.ExecutableSha256, PhysicalRiftPositionReader.GameSha256,
             StringComparison.OrdinalIgnoreCase)
@@ -428,8 +622,8 @@ public partial class MainWindow
         && sample.X is { } x && float.IsFinite(x)
         && sample.Y is { } y && float.IsFinite(y)
         && sample.Z is { } z && float.IsFinite(z)
-        && DateTimeOffset.UtcNow >= sample.CapturedAtUtc
-        && DateTimeOffset.UtcNow - sample.CapturedAtUtc < TimeSpan.FromSeconds(2.5);
+        && observedAtUtc >= sample.CapturedAtUtc
+        && observedAtUtc - sample.CapturedAtUtc < TimeSpan.FromSeconds(2.5);
 
     private bool CanShowPhysicalXyzSample(CancellationTokenSource owner) =>
         !_closing && !_physicalXyzClosing && !owner.IsCancellationRequested
@@ -444,9 +638,12 @@ public partial class MainWindow
         return clean;
     }
 
-    private static string FormatPhysicalXyzCandidate(PhysicalRiftPositionResult sample)
+    private static string FormatPhysicalXyzCandidate(PhysicalRiftPositionResult sample) =>
+        FormatPhysicalXyzCandidate(sample, ValidPhysicalXyzCandidate(sample));
+
+    private static string FormatPhysicalXyzCandidate(PhysicalRiftPositionResult sample, bool candidateUsable)
     {
-        if (!ValidPhysicalXyzCandidate(sample))
+        if (!candidateUsable)
             return "XYZ: unavailable";
         return "X: " + sample.X!.Value.ToString("F3", CultureInfo.InvariantCulture)
             + "   Y: " + sample.Y!.Value.ToString("F3", CultureInfo.InvariantCulture)
@@ -560,6 +757,7 @@ public partial class MainWindow
             + "  |  Identity faults: " + _physicalXyzIdentityFaults.ToString(CultureInfo.InvariantCulture)
             + "  |  Continuity faults: " + _physicalXyzContinuityFaults.ToString(CultureInfo.InvariantCulture)
             + "  |  Errors: " + _physicalXyzErrors.ToString(CultureInfo.InvariantCulture);
+        UpdatePhysicalXyzTraceSummary();
     }
 
     private void PhysicalXyzAgeTick(object? sender, EventArgs e)
@@ -581,6 +779,7 @@ public partial class MainWindow
         {
             // A stalled native read must not leave a plausible old coordinate or baseline visible.
             _physicalXyzComparison?.Reset();
+            // UI-only age invalidation is not a native read outcome: no trace entry.
             ClearPhysicalXyzPosition();
             return;
         }
@@ -641,13 +840,38 @@ public partial class MainWindow
         var notFresh = example with { Status = PhysicalRiftPositionStatus.Unavailable };
         var exampleTracker = new PhysicalRiftPositionChangeTracker();
         PhysicalRiftPositionChangeSnapshot baseline = exampleTracker.Observe(example, 100);
-        PhysicalRiftPositionChangeSnapshot moved = exampleTracker.Observe(
-            example with { X = 4.25f, CapturedAtUtc = DateTimeOffset.UtcNow }, 1200);
+        PhysicalRiftPositionResult syntheticMoved = example with
+        {
+            X = 4.25f,
+            CapturedAtUtc = example.CapturedAtUtc.AddMilliseconds(100)
+        };
+        PhysicalRiftPositionChangeSnapshot moved = exampleTracker.Observe(syntheticMoved, 1200);
+        var syntheticTrace = new PhysicalRiftPositionTraceRecorder(maxEntries: PhysicalXyzTraceLimit);
+        syntheticTrace.BeginSession(123, DateTimeOffset.UnixEpoch.UtcTicks);
+        syntheticTrace.Record(example, baseline, 100, example.CapturedAtUtc);
+        syntheticTrace.Record(syntheticMoved, moved, 1200, syntheticMoved.CapturedAtUtc);
+        syntheticTrace.RecordUnavailable("native_read_timeout", 1300, DateTimeOffset.UtcNow);
+        PhysicalRiftPositionTraceReport syntheticReport = syntheticTrace.Snapshot();
+        bool traceSynthetic = syntheticReport.TotalSamples == 3
+            && syntheticReport.RetainedSamples == 3
+            && syntheticReport.ProcessId == 123
+            && syntheticReport.ProcessStartUtcTicks == DateTimeOffset.UnixEpoch.UtcTicks
+            && syntheticReport.Samples.Count == 3
+            && FormatPhysicalXyzTraceSummary(syntheticReport, sampling: false)
+                .Contains("HISTORICAL after Stop/fault", StringComparison.Ordinal)
+            && FormatPhysicalXyzTraceSummary(syntheticReport, sampling: true)
+                .Contains("sampling now", StringComparison.Ordinal)
+            && syntheticReport.ToJson().Contains("samples", StringComparison.OrdinalIgnoreCase);
+
         bool initial = PhysicalXyzTab is not null
             && ObserverTabs.Items.IndexOf(PhysicalXyzTab) == 0
             && PhysicalXyzClientPicker is { Items.Count: 0 }
             && PhysicalXyzStartButton is { IsEnabled: false }
             && PhysicalXyzStopButton is { IsEnabled: false }
+            && PhysicalXyzTraceSaveButton is { IsEnabled: false }
+            && PhysicalXyzTraceSummaryText.Text.Contains("no verified observation session yet", StringComparison.Ordinal)
+            && PhysicalXyzTraceSaveStatusText.Text.Contains("Nothing saved", StringComparison.Ordinal)
+            && _physicalXyzTrace is null
             && PhysicalXyzCoordinatesText?.Text == "XYZ: unavailable"
             && PhysicalXyzDifferenceText?.Text == "Position comparison: no baseline."
             && PhysicalXyzChangeSummaryText.Text.Contains("differences this session: 0", StringComparison.Ordinal)
@@ -680,6 +904,6 @@ public partial class MainWindow
         ResetPhysicalXyzChangeHistory();
         bool reset = _physicalXyzChangedSamples == 0 && _physicalXyzRecentChanges.Count == 0
             && PhysicalXyzChangeHistoryText.Text == "No coordinate-value differences recorded in this session.";
-        return initial && retained && reset;
+        return initial && retained && reset && traceSynthetic;
     }
 }

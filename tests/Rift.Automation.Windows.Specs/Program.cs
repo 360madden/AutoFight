@@ -110,6 +110,7 @@ StandaloneTelemetryQualificationSpecs.Run(Test, Check);
 StandaloneVmPulseSpecs.Run(Test, Check);
 PhysicalRiftPositionSpecs.Run(Test, Check);
 PhysicalRiftPositionChangeSpecs.Run(Test, Check);
+PhysicalRiftPositionTraceSpecs.Run(Test, Check);
 VmTelemetryWatchSpecs.Run(Test, Check);
 VmPulseObservationSpecs.Run(Test, Check);
 VmControllerBindingSpecs.Run(Test, Check);
