@@ -36,7 +36,12 @@ public static class PhysicalTelemetryCoordinator
         try
         {
             return await PhysicalReaderProcessSupervisor.RunAsync(readerExecutable, tracker,
-                (signal, generation, ct) => receivers.RotateAsync(signal, generation, ct),
+                async (signal, generation, ct) =>
+                {
+                    await receivers.RotateAsync(signal, generation, ct);
+                    if (tracker.IsCurrent(signal, generation))
+                        Console.WriteLine($"AutoFight PID {gameProcessId}: enter /afbind {signal.Nonce} in the matching RIFT client.");
+                },
                 cancellationToken);
         }
         finally
