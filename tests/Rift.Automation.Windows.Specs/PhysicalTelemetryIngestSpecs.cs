@@ -79,12 +79,15 @@ internal static class PhysicalTelemetryIngestSpecs
         {
             var valid = "2026-11-16T03:30:00Z scan=complete selection=NotFound freshness=Unavailable ageMs=- delivery=delivered-http-200";
             var malicious = "Bearer SECRET scan=complete selection=NotFound freshness=Unavailable ageMs=- delivery=delivered-http-200";
-            using var input = new StringReader("arbitrary secret\n" + valid + "\n" + malicious + "\n");
+            var spoof = "SECRET scan=complete selection=NotFound freshness=Unavailable ageMs=- delivery=delivered-http-200";
+            var validFractional = "2026-11-16T03:30:00.1234567+00:00 scan=complete selection=NotFound freshness=Unavailable ageMs=42 fastScan=complete fastFreshness=Fresh fastAgeMs=12 delivery=delivered-http-200";
+            using var input = new StringReader("arbitrary secret\n" + valid + "\n" + malicious + "\n" + spoof + "\n" + validFractional + "\n");
             var forwarded = new List<string>();
             PhysicalReaderSessionMonitor.MonitorAsync(input, new PhysicalReaderSessionTracker(),
                 (_, _, _) => Task.CompletedTask, CancellationToken.None,
                 line => forwarded.Add(line)).GetAwaiter().GetResult();
-            check(forwarded.Count == 1 && forwarded[0] == valid, "only approved status relayed");
+            check(forwarded.Count == 2 && forwarded[0] == valid && forwarded[1] == validFractional,
+                "only timestamped status relayed, including fractional timestamps");
         });
         test("Physical reader stdout monitor observes rotations and revokes on EOF", () =>
         {
