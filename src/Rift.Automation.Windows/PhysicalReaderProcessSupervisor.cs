@@ -10,7 +10,8 @@ public static class PhysicalReaderProcessSupervisor
         string readerExecutable,
         PhysicalReaderSessionTracker tracker,
         Func<PhysicalReaderSessionSignal, long, CancellationToken, Task> onSession,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<string>? onStatus = null)
     {
         ArgumentNullException.ThrowIfNull(tracker);
         ArgumentNullException.ThrowIfNull(onSession);
@@ -61,7 +62,7 @@ public static class PhysicalReaderProcessSupervisor
         try
         {
             await PhysicalReaderSessionMonitor.MonitorAsync(
-                process.StandardOutput, tracker, onSession, cancellationToken);
+                process.StandardOutput, tracker, onSession, cancellationToken, onStatus);
             await process.WaitForExitAsync(cancellationToken);
             return process.ExitCode;
         }

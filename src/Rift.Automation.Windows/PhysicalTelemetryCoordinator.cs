@@ -61,7 +61,8 @@ public static class PhysicalTelemetryCoordinator
                             Console.WriteLine($"AutoFight PID {gameProcessId}: reader nonce rotated to {signal.Nonce}. /afbind cannot replace an existing binding; reload the game UI before binding, or use the explicitly configured /afguide rebind flow.");
                     }
                 },
-                cancellationToken);
+                cancellationToken,
+                line => Console.WriteLine("AutoFight reader: " + line));
         }
         finally
         {

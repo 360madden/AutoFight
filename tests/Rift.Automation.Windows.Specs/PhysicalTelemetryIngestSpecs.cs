@@ -75,6 +75,17 @@ internal static class PhysicalTelemetryIngestSpecs
                 check(rejected, "invalid executable rejected");
             }
         });
+        test("Reader monitor forwards only bounded status lines", () =>
+        {
+            var valid = "2026-11-16T03:30:00Z scan=complete selection=NotFound freshness=Unavailable ageMs=- delivery=delivered-http-200";
+            var malicious = "Bearer SECRET scan=complete selection=NotFound freshness=Unavailable ageMs=- delivery=delivered-http-200";
+            using var input = new StringReader("arbitrary secret\n" + valid + "\n" + malicious + "\n");
+            var forwarded = new List<string>();
+            PhysicalReaderSessionMonitor.MonitorAsync(input, new PhysicalReaderSessionTracker(),
+                (_, _, _) => Task.CompletedTask, CancellationToken.None,
+                line => forwarded.Add(line)).GetAwaiter().GetResult();
+            check(forwarded.Count == 1 && forwarded[0] == valid, "only approved status relayed");
+        });
         test("Physical reader stdout monitor observes rotations and revokes on EOF", () =>
         {
             var id = Guid.NewGuid();
