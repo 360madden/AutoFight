@@ -33,14 +33,18 @@ public static class PhysicalTelemetryCoordinator
             throw new InvalidDataException("Delivery token missing.");
         var roots = new[] { Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "OneDrive", "Documents") };
+        var addonDirectoryFound = false;
         foreach (var rootPath in roots.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var addon = Path.Combine(rootPath, "RIFT", "Interface", "Addons", "AutoFight");
             if (!Directory.Exists(addon)) continue;
+            addonDirectoryFound = true;
             var warning = PhysicalAddonReloadPreflight.Inspect(gameProcessId, addon);
             if (warning is not null) Console.WriteLine("AutoFight addon preflight: " + warning);
             break;
         }
+        if (!addonDirectoryFound)
+            Console.WriteLine("AutoFight addon preflight: addon directory not found in the standard Documents locations; activation is unverified.");
         var tracker = new PhysicalReaderSessionTracker();
         await using var receivers = new PhysicalReceiverRotation(tracker, gameProcessId, endpoint.Port, token);
         try
@@ -50,7 +54,12 @@ public static class PhysicalTelemetryCoordinator
                 {
                     await receivers.RotateAsync(signal, generation, ct);
                     if (tracker.IsCurrent(signal, generation))
-                        Console.WriteLine($"AutoFight PID {gameProcessId}: enter /afbind {signal.Nonce} in the matching RIFT client.");
+                    {
+                        if (generation == 1)
+                            Console.WriteLine($"AutoFight PID {gameProcessId}: enter /afbind {signal.Nonce} in the matching RIFT client.");
+                        else
+                            Console.WriteLine($"AutoFight PID {gameProcessId}: reader nonce rotated to {signal.Nonce}. /afbind cannot replace an existing binding; reload the game UI before binding, or use the explicitly configured /afguide rebind flow.");
+                    }
                 },
                 cancellationToken);
         }
