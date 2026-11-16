@@ -14,7 +14,6 @@ public sealed class PhysicalReceiverRotation : IAsyncDisposable
     private readonly SemaphoreSlim rotationGate = new(1, 1);
     private CancellationTokenSource? activeStop;
     private Task? activeTask;
-    private long activeGeneration;
 
     public PhysicalReceiverRotation(PhysicalReaderSessionTracker tracker, int gameProcessId,
         int port, string token)
@@ -47,9 +46,17 @@ public sealed class PhysicalReceiverRotation : IAsyncDisposable
             StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Pinned physical RIFT is unavailable.");
         var path = game.MainModule?.FileName ?? throw new InvalidOperationException("Game image unavailable.");
+        var gameStartTicks = game.StartTime.ToUniversalTime().Ticks;
+        await using var imageStream = new FileStream(path, FileMode.Open, FileAccess.Read,
+            FileShare.Read, 128 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        var imageHash = Convert.ToHexString(await SHA256.HashDataAsync(imageStream, cancellationToken));
+        game.Refresh();
+        if (game.HasExited || game.StartTime.ToUniversalTime().Ticks != gameStartTicks ||
+            !string.Equals(game.MainModule?.FileName, path, StringComparison.OrdinalIgnoreCase) ||
+            !tracker.IsCurrent(signal, generation))
+            throw new InvalidOperationException("Game or reader identity changed during receiver preparation.");
         var binding = new PhysicalTelemetryBinding(signal.InstanceId, signal.Nonce,
-            game.Id, game.StartTime.ToUniversalTime().Ticks, path,
-            Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))));
+            game.Id, gameStartTicks, path, imageHash);
         var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var session = new PhysicalTelemetryHostSession(binding, port, token);
         Task running;
@@ -58,7 +65,6 @@ public sealed class PhysicalReceiverRotation : IAsyncDisposable
         lock (gate)
         {
             activeStop = stop;
-            activeGeneration = generation;
             activeTask = ObserveAsync(running, session, stop);
         }
         }
@@ -89,7 +95,6 @@ public sealed class PhysicalReceiverRotation : IAsyncDisposable
             running = activeTask;
             activeStop = null;
             activeTask = null;
-            activeGeneration = 0;
         }
         if (stop is null) return;
         stop.Cancel();
