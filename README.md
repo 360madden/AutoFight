@@ -159,6 +159,7 @@ This creates a local unsigned executable—not a GitHub release or installer. Th
 | [Lab 2 first-XYZ handoff](docs/HANDOFF-AUTOFIGHT-LAB2-FIRST-XYZ-2026-11-06.md) | Exact source/Reader transport outcome and next lab steps |
 | [Architecture](docs/automation-platform-architecture.md) | Contracts, identity, state and provider arbitration |
 | [Roadmap](docs/automation-platform-roadmap.md) | Development milestones and acceptance gates |
+| [Storage Guardian (review candidate)](docs/STORAGE-GUARDIAN.md) | Read-only whole-repo storage audit, optional history, protected build-cleanup preview and fixture tests; independent review pending |
 | [Developer instructions](AGENTS.md) | Project ownership, engineering and build requirements |
 
 ---
