@@ -8,6 +8,62 @@ internal static class PhysicalTelemetryIngestSpecs
 {
     internal static void Run(Action<string, Action> test, Action<bool, string> check)
     {
+        test("Physical receiver rotation refuses stale session before touching game", () =>
+        {
+            var tracker = new PhysicalReaderSessionTracker();
+            var signal = new PhysicalReaderSessionSignal(Guid.NewGuid(), new string('a', 32));
+            using var cancellation = new CancellationTokenSource();
+            var rotation = new PhysicalReceiverRotation(tracker, 999999, 49196, new string('b', 40));
+            bool rejected = false;
+            try { rotation.RotateAsync(signal, 1, cancellation.Token).GetAwaiter().GetResult(); }
+            catch (InvalidOperationException) { rejected = true; }
+            check(rejected, "untracked session rejected");
+            rotation.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        });
+        test("Physical coordinator refuses invalid reader executable before launch", () =>
+        {
+            bool rejected = false;
+            try
+            {
+                PhysicalTelemetryCoordinator.RunAsync(@"C:\\Windows\\System32\\cmd.exe",
+                    999999, CancellationToken.None).GetAwaiter().GetResult();
+            }
+            catch (ArgumentException) { rejected = true; }
+            check(rejected, "coordinator cannot launch arbitrary executable");
+        });
+        test("Physical receiver concurrent stale rotations do not start a listener", () =>
+        {
+            var tracker = new PhysicalReaderSessionTracker();
+            var signal = new PhysicalReaderSessionSignal(Guid.NewGuid(), new string('a', 32));
+            using var stop = new CancellationTokenSource();
+            var rotation = new PhysicalReceiverRotation(tracker, 999999, 49197, new string('b', 40));
+            var tasks = Enumerable.Range(0, 8).Select(_ => Task.Run(async () => {
+                try { await rotation.RotateAsync(signal, 1, stop.Token); return false; }
+                catch (InvalidOperationException) { return true; }
+            })).ToArray();
+            Task.WaitAll(tasks);
+            check(tasks.All(task => task.Result), "all stale rotations rejected");
+            rotation.StopAsync().GetAwaiter().GetResult();
+            rotation.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        });
+        test("Physical reader supervisor refuses unpinned executable paths", () =>
+        {
+            var tracker = new PhysicalReaderSessionTracker();
+            Task Callback(PhysicalReaderSessionSignal signal, long generation, CancellationToken ct) =>
+                Task.CompletedTask;
+            foreach (var path in new[] { "reader.exe", @"C:\\Windows\\System32\\cmd.exe",
+                @"C:\\not-present\\Rift.Automation.GuestReader.exe" })
+            {
+                bool rejected = false;
+                try
+                {
+                    PhysicalReaderProcessSupervisor.RunAsync(path, tracker, Callback,
+                        CancellationToken.None).GetAwaiter().GetResult();
+                }
+                catch (ArgumentException) { rejected = true; }
+                check(rejected, "invalid executable rejected");
+            }
+        });
         test("Physical reader stdout monitor observes rotations and revokes on EOF", () =>
         {
             var id = Guid.NewGuid();

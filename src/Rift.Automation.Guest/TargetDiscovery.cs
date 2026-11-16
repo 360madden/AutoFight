@@ -20,9 +20,17 @@ public static class TargetDiscovery
     public static async Task<TargetDiscoveryResult> DiscoverAsync(
         string processName,
         string readerSessionNonce,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? targetProcessId = null)
     {
-        var processes = Process.GetProcessesByName(processName);
+        Process[] processes;
+        if (targetProcessId is { } pid)
+        {
+            if (pid < 1) return new("invalid-pin", 0, null, "Pinned process ID must be positive.");
+            try { processes = [Process.GetProcessById(pid)]; }
+            catch (ArgumentException) { return new("not-found", 0, null, "Pinned RIFT process is unavailable."); }
+        }
+        else processes = Process.GetProcessesByName(processName);
         try
         {
             if (processes.Length == 0)
@@ -32,6 +40,8 @@ public static class TargetDiscovery
 
             var process = processes[0];
             process.Refresh();
+            if (!string.Equals(process.ProcessName, processName, StringComparison.OrdinalIgnoreCase))
+                return new("wrong-process", 1, null, "Pinned process is not the requested RIFT executable.");
             if (process.HasExited)
                 return new("not-found", 0, null, "The discovered rift_x64 process exited.");
             var startTicks = process.StartTime.ToUniversalTime().Ticks;

@@ -53,6 +53,18 @@ internal static class GuestWireSpecs
     internal static void Run(Action<string, Action> test,
         Action<bool, string> check)
     {
+        test("Pinned process discovery rejects invalid, missing, and wrong executable", () =>
+        {
+            var invalid = TargetDiscovery.DiscoverAsync("rift_x64", Nonce,
+                CancellationToken.None, -1).GetAwaiter().GetResult();
+            check(invalid.Status == "invalid-pin" && invalid.Target is null, "negative pin");
+            var missing = TargetDiscovery.DiscoverAsync("rift_x64", Nonce,
+                CancellationToken.None, int.MaxValue).GetAwaiter().GetResult();
+            check(missing.Status == "not-found" && missing.Target is null, "missing PID");
+            var wrong = TargetDiscovery.DiscoverAsync("rift_x64", Nonce,
+                CancellationToken.None, Environment.ProcessId).GetAwaiter().GetResult();
+            check(wrong.Status == "wrong-process" && wrong.Target is null, "wrong executable");
+        });
         test("Guest addon decoder preserves zero negative XYZ and false combat", () =>
         {
             var result = AddonFrameDecoder.Decode(Frame(7, 2, 12.5));

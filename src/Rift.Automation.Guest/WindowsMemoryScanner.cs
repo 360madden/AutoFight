@@ -229,10 +229,10 @@ public static class WindowsMemoryScanner
         foreach (var region in regions)
         {
             plannedBytes = checked(plannedBytes + region.Size);
-            if (plannedBytes > maxScanBytes)
-                return new(Incomplete("byte-budget-exceeded", plannedBytes, 0, regions.Count, stopwatch.Elapsed,
-                    $"Readable private memory exceeds the configured {maxScanBytes} byte budget."), null);
         }
+        if (plannedBytes > maxScanBytes)
+            return new(Incomplete("byte-budget-exceeded", plannedBytes, 0, regions.Count, stopwatch.Elapsed,
+                $"Readable private memory totals {plannedBytes} bytes across {regions.Count} regions; configured budget is {maxScanBytes} bytes."), null);
 
         var accumulator = new EnvelopeCandidateAccumulator(challenge);
         var targetVitals = new TargetVitalsV2CandidateAccumulator(challenge);

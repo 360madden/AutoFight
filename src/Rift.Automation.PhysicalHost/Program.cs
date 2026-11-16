@@ -3,9 +3,35 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Rift.Automation.Windows;
 
+if (args.Length == 4 && args[0] == "--coordinate" && args[2] == "--pid")
+{
+    if (!int.TryParse(args[3], out var pid) || pid < 1)
+    {
+        Console.Error.WriteLine("A positive physical RIFT PID is required.");
+        return 2;
+    }
+    using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Cancel(); };
+    try
+    {
+        return await PhysicalTelemetryCoordinator.RunAsync(args[1], pid, stop.Token);
+    }
+    catch (OperationCanceledException) when (stop.IsCancellationRequested)
+    {
+        Console.WriteLine("Coordinator stopped after bounded runtime or cancellation.");
+        return 0;
+    }
+    catch (Exception ex) when (ex is ArgumentException or InvalidDataException or IOException or
+        JsonException or InvalidOperationException or System.ComponentModel.Win32Exception)
+    {
+        Console.Error.WriteLine($"Coordinator startup failed: {ex.GetType().Name}");
+        return 1;
+    }
+}
+
 if (args.Length != 2 || args[0] != "--config")
 {
-    Console.Error.WriteLine("Usage: Rift.Automation.PhysicalHost --config <private-config.json>");
+    Console.Error.WriteLine("Usage: Rift.Automation.PhysicalHost --config <private-config.json> OR --coordinate <absolute-reader.exe> --pid <rift-pid>");
     return 2;
 }
 try

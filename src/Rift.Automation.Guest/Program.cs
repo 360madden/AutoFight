@@ -83,7 +83,8 @@ internal static class Program
                 var discovery = await TargetDiscovery.DiscoverAsync(
                     configuration.ProcessName,
                     nonce,
-                    cancellation.Token);
+                    cancellation.Token,
+                    configuration.TargetProcessId);
 
                 if (discovery.Target is null)
                 {
@@ -141,7 +142,8 @@ internal static class Program
                         discovery = await TargetDiscovery.DiscoverAsync(
                             configuration.ProcessName,
                             nonce,
-                            cancellation.Token);
+                            cancellation.Token,
+                            configuration.TargetProcessId);
                         if (discovery.Target is null)
                             continue;
                     }
@@ -182,7 +184,8 @@ internal static class Program
                     after = await TargetDiscovery.DiscoverAsync(
                         configuration.ProcessName,
                         nonce,
-                        cancellation.Token);
+                        cancellation.Token,
+                        configuration.TargetProcessId);
                     var scopedTargetStable = after.Target is not null && SameProcess(attachedTarget, after.Target);
                     targetVitalsDiagnostic = TargetVitalsCandidateReporting.Build(scopedScan, nonce, scopedTargetStable);
                     var scopedSelection = !scopedTargetStable
@@ -226,7 +229,8 @@ internal static class Program
                     after = await TargetDiscovery.DiscoverAsync(
                         configuration.ProcessName,
                         nonce,
-                        cancellation.Token);
+                        cancellation.Token,
+                        configuration.TargetProcessId);
                     targetVitalsDiagnostic = TargetVitalsCandidateReporting.Build(lastScan, nonce,
                         after.Target is not null && SameProcess(attachedTarget, after.Target));
                     lastSelection = after.Target is null || !SameProcess(attachedTarget, after.Target)
