@@ -32,7 +32,9 @@ public sealed record LiveCandidateRegion(
 
 public static class WindowsMemoryScanner
 {
-    private const int ChunkBytes = 64 * 1024;
+    // Larger bounded reads reduce cross-process syscall overhead on large physical clients.
+    // Candidate accumulators preserve framing across chunk boundaries.
+    private const int ChunkBytes = 256 * 1024;
     private const int MaxRegionCount = 262_144;
     private const int MaxStableChunkPartialCopyRetries = 2;
 
