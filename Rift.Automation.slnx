@@ -3,6 +3,7 @@
     <Project Path="src/Rift.Automation.Core/Rift.Automation.Core.csproj" />
     <Project Path="src/Rift.Automation.Desktop/Rift.Automation.Desktop.csproj" />
     <Project Path="src/Rift.Automation.Guest/Rift.Automation.Guest.csproj" />
+    <Project Path="src/Rift.Automation.PhysicalHost/Rift.Automation.PhysicalHost.csproj" />
     <Project Path="src/Rift.Automation.Windows/Rift.Automation.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">

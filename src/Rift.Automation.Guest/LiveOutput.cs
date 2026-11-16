@@ -135,6 +135,9 @@ public sealed record LiveReaderSnapshot(
     // Address-free explanation of the latest full-scan anchor attempt. This is
     // diagnostic provenance only and never participates in freshness decisions.
     public FastObservationAnchorDiagnostic? FastObservationDiagnostic { get; init; }
+
+    // Diagnostic only. Never authorizes combat or asserts live source qualification.
+    public TargetVitalsCandidateDiagnostic? TargetVitalsCandidate { get; init; }
 }
 
 public static class LiveOutput

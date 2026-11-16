@@ -54,6 +54,35 @@ internal static class StandaloneTelemetryHttpSpecs
     internal static void Run(Action<string, Action> test,
         Action<bool, string> check)
     {
+        test("Production local receiver binds loopback and accepts authenticated delivery", () =>
+        {
+            var reservation = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+            reservation.Start();
+            int port = ((System.Net.IPEndPoint)reservation.LocalEndpoint).Port;
+            reservation.Stop();
+            int deliveries = 0;
+            using var listener = StandaloneTelemetryHttpListener.CreateLocal(
+                port, Token, (body, token, peer, time) =>
+                {
+                    check(peer == "127.0.0.1" && token == Token, "loopback and token");
+                    Interlocked.Increment(ref deliveries);
+                    return true;
+                });
+            using var cancelled = new CancellationTokenSource();
+            Task run = listener.RunAsync(cancelled.Token);
+            try
+            {
+                check(Send(port, Request("{}")).StartsWith("HTTP/1.1 200", StringComparison.Ordinal), "accepted");
+                check(Send(port, HeadersOnly(Request("{}", token: new string('x', Token.Length))))
+                    .StartsWith("HTTP/1.1 403", StringComparison.Ordinal), "bad token denied");
+                check(deliveries == 1, "one authorized delivery");
+            }
+            finally
+            {
+                cancelled.Cancel();
+                run.GetAwaiter().GetResult();
+            }
+        });
         test("Standalone receiver records valid and game-unavailable HTTP deliveries", () =>
         {
             int deliveries = 0;

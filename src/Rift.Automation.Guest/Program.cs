@@ -60,6 +60,7 @@ internal static class Program
         var launchedAt = timeProvider.GetTimestamp();
         var instanceId = Guid.NewGuid();
         var nonce = NewNonce();
+        PrintSessionIdentity(instanceId, nonce);
         PrintBindingInstruction(nonce);
         var outputPath = configuration.ResolveOutputPath();
         using var delivery = new LiveDeliveryClient(configuration.Delivery);
@@ -123,6 +124,7 @@ internal static class Program
                     if (hadAttachment)
                     {
                         nonce = NewNonce();
+                        PrintSessionIdentity(instanceId, nonce);
                         PrintBindingInstruction(nonce);
                     }
                     await DelayAsync(configuration.PollIntervalMilliseconds, cancellation.Token);
@@ -134,6 +136,7 @@ internal static class Program
                     if (attachedTarget is not null)
                     {
                         nonce = NewNonce();
+                        PrintSessionIdentity(instanceId, nonce);
                         PrintBindingInstruction(nonce);
                         discovery = await TargetDiscovery.DiscoverAsync(
                             configuration.ProcessName,
@@ -162,6 +165,7 @@ internal static class Program
                     MaxClockSkew = TimeSpan.FromSeconds(1)
                 };
                 LiveAddonFreshness freshnessResult;
+                TargetVitalsCandidateDiagnostic? targetVitalsDiagnostic = null;
                 TargetDiscoveryResult after;
                 if (fastSession is not null && fastSession.CanObserve(attachedTarget, scanStartedAt, out _))
                 {
@@ -180,6 +184,7 @@ internal static class Program
                         nonce,
                         cancellation.Token);
                     var scopedTargetStable = after.Target is not null && SameProcess(attachedTarget, after.Target);
+                    targetVitalsDiagnostic = TargetVitalsCandidateReporting.Build(scopedScan, nonce, scopedTargetStable);
                     var scopedSelection = !scopedTargetStable
                         ? new LiveAddonSelection(
                             LiveAddonSelectionStatus.Conflict, null, 0, 0,
@@ -202,6 +207,8 @@ internal static class Program
                             scopedSelection,
                             scanStartedAt,
                             scopedCompletedAt);
+                    if (freshnessResult.Status == LiveFreshnessStatus.Invalidated)
+                        targetVitalsDiagnostic = null;
                 }
                 else
                 {
@@ -220,6 +227,8 @@ internal static class Program
                         configuration.ProcessName,
                         nonce,
                         cancellation.Token);
+                    targetVitalsDiagnostic = TargetVitalsCandidateReporting.Build(lastScan, nonce,
+                        after.Target is not null && SameProcess(attachedTarget, after.Target));
                     lastSelection = after.Target is null || !SameProcess(attachedTarget, after.Target)
                         ? new LiveAddonSelection(
                             LiveAddonSelectionStatus.Conflict, null, 0, 0,
@@ -230,6 +239,8 @@ internal static class Program
                         lastSelection,
                         scanStartedAt,
                         scanCompletedAt);
+                    if (freshnessResult.Status == LiveFreshnessStatus.Invalidated)
+                        targetVitalsDiagnostic = null;
                     lastFastObservation = null;
                     fastObservationDiagnostic = null;
                     fastSession = after.Target is not null && SameProcess(attachedTarget, after.Target) &&
@@ -265,7 +276,8 @@ internal static class Program
                     delivery.State,
                     timeProvider,
                     lastFastObservation,
-                    fastObservationDiagnostic);
+                    fastObservationDiagnostic,
+                    targetVitalsDiagnostic);
                 await delivery.DeliverAsync(beforeDelivery, cancellation.Token);
                 var afterDelivery = CreateSnapshot(
                     instanceId,
@@ -284,7 +296,8 @@ internal static class Program
                     delivery.State,
                     timeProvider,
                     lastFastObservation,
-                    fastObservationDiagnostic);
+                    fastObservationDiagnostic,
+                    targetVitalsDiagnostic);
                 await LiveOutput.WriteAtomicAsync(outputPath, afterDelivery, cancellation.Token);
                 PrintStatus(afterDelivery);
 
@@ -296,6 +309,7 @@ internal static class Program
                     lastFastObservation = null;
                     fastObservationDiagnostic = null;
                     nonce = NewNonce();
+                    PrintSessionIdentity(instanceId, nonce);
                     PrintBindingInstruction(nonce);
                 }
                 await DelayAsync(configuration.PollIntervalMilliseconds, cancellation.Token);
@@ -357,7 +371,8 @@ internal static class Program
         LiveDeliveryReport delivery,
         TimeProvider timeProvider,
         FastObservationReport? fastObservation,
-        FastObservationAnchorDiagnostic? fastObservationDiagnostic)
+        FastObservationAnchorDiagnostic? fastObservationDiagnostic,
+        TargetVitalsCandidateDiagnostic? targetVitalsDiagnostic)
     {
         var publishedAt = timeProvider.GetTimestamp();
         return new(
@@ -383,7 +398,8 @@ internal static class Program
             FastObservation = fastObservation is null
                 ? null
                 : LiveOutput.StampFastObservation(fastObservation, publishedAt, timeProvider),
-            FastObservationDiagnostic = fastObservationDiagnostic
+            FastObservationDiagnostic = fastObservationDiagnostic,
+            TargetVitalsCandidate = targetVitalsDiagnostic
         };
     }
 
@@ -504,6 +520,17 @@ internal static class Program
         new(false, status, 0, 0, 0, TimeSpan.Zero, [], 0, 0, reason);
 
     private static string NewNonce() => Guid.NewGuid().ToString("N");
+
+    // Token-free coordination signal emitted before the first memory scan and on nonce rotation.
+    private static void PrintSessionIdentity(Guid instanceId, string nonce)
+    {
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new
+        {
+            eventType = "autofight-reader-session-v1",
+            instanceId,
+            nonce
+        }));
+    }
 
     private static void PrintBindingInstruction(string nonce)
     {

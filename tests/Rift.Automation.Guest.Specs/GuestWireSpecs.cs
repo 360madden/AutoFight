@@ -199,6 +199,15 @@ internal static class GuestWireSpecs
                 "guest can send only to a private observation endpoint");
         });
 
+        test("Guest loopback delivery requires explicit opt-in", () =>
+        {
+            const string local = "http://127.0.0.1:49123/observation";
+            string token = new('a', 32);
+            check(Rejects(() => new LiveDeliveryConfiguration(local, token).Validate()), "default denied");
+            new LiveDeliveryConfiguration(local, token, AllowLoopback: true).Validate();
+            check(Rejects(() => new LiveDeliveryConfiguration("http://127.0.0.2:49123/observation", token, true).Validate()), "other loopback denied");
+            check(Rejects(() => new LiveDeliveryConfiguration("http://8.8.8.8:49123/observation", token, true).Validate()), "public denied");
+        });
         test("Guest HTTP delivery ports match standalone host listener requirements", () =>
         {
             string token = new('a', 32);

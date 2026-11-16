@@ -10,6 +10,8 @@ AutoFight_Frame = nil
 AutoFight_LiveFrame = nil
 AutoFight_LiveFrames = {}
 AutoFight_Guidance = nil
+AutoFight_TargetVitalsV2Frame = nil
+local lastTargetVitalsSequence
 
 -- A complete native scan can take longer than one 0.5 second publication.
 -- Keep a few sequence-distinct envelopes reachable so the scanner can finish one
@@ -74,6 +76,7 @@ end
 local function update()
     if not producer then
         AutoFight_Frame = nil
+        AutoFight_TargetVitalsV2Frame = nil
         clearLiveFrames()
         return
     end
@@ -85,9 +88,22 @@ local function update()
     end
     AutoFight_Frame = producer.Frame
     if rebindFailedClosed or (rebindAfterSequence and producer.Sequence <= rebindAfterSequence) then
+        AutoFight_TargetVitalsV2Frame = nil
         clearLiveFrames()
     else
         publishLiveFrame(live:Wrap(producer.Frame))
+        if AutoFight_LiveFrame and producer.Observation and
+            producer.Sequence ~= lastTargetVitalsSequence and privateVars.TargetVitalsV2 then
+            lastTargetVitalsSequence = producer.Sequence
+            AutoFight_TargetVitalsV2Frame = nil
+            local observation = producer.Observation
+            local timeField = observation.clock
+            if timeField and timeField.status == "ok" then
+                local ok, frame = pcall(privateVars.TargetVitalsV2.Capture,
+                    inspectApi, observation.sequence, observation.epoch, timeField.value)
+                if ok and frame then AutoFight_TargetVitalsV2Frame = live:Wrap(frame) end
+            end
+        end
         if rebindAfterSequence and AutoFight_LiveFrame then rebindAfterSequence = nil end
     end
     displayGuidance()
@@ -159,6 +175,7 @@ pcall(function()
                         -- Do not leave the old nonce globally visible until the
                         -- next producer update.
                         clearLiveFrames()
+                        AutoFight_TargetVitalsV2Frame = nil
                         rebindAfterSequence = producer.Sequence
                     else
                         rebindFailedClosed = true

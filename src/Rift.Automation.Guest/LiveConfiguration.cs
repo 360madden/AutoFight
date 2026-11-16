@@ -85,14 +85,14 @@ public sealed record LiveConfiguration(
         : Path.GetFullPath(OutputPath, AppContext.BaseDirectory);
 }
 
-public sealed record LiveDeliveryConfiguration(string Endpoint, string Token)
+public sealed record LiveDeliveryConfiguration(string Endpoint, string Token, bool AllowLoopback = false)
 {
     // Never let synthesized record formatting disclose a bearer token.
     public override string ToString() => "LiveDeliveryConfiguration [redacted]";
 
     public void Validate()
     {
-        if (!TryValidateEndpoint(Endpoint, out _, out var error))
+        if (!TryValidateEndpoint(Endpoint, AllowLoopback, out _, out var error))
             throw new InvalidDataException(error);
         if (Token is null || Token.Length is < 32 or > 512 ||
             Token.Any(c => c < '!' || c > '~'))
@@ -101,12 +101,12 @@ public sealed record LiveDeliveryConfiguration(string Endpoint, string Token)
 
     public Uri GetValidatedEndpoint()
     {
-        if (!TryValidateEndpoint(Endpoint, out var endpoint, out var error))
+        if (!TryValidateEndpoint(Endpoint, AllowLoopback, out var endpoint, out var error))
             throw new InvalidDataException(error);
         return endpoint!;
     }
 
-    private static bool TryValidateEndpoint(string raw, out Uri? endpoint, out string error)
+    private static bool TryValidateEndpoint(string raw, bool allowLoopback, out Uri? endpoint, out string error)
     {
         endpoint = null;
         error = string.Empty;
@@ -132,11 +132,11 @@ public sealed record LiveDeliveryConfiguration(string Endpoint, string Token)
         var privateAddress = bytes[0] == 10 ||
             (bytes[0] == 172 && bytes[1] is >= 16 and <= 31) ||
             (bytes[0] == 192 && bytes[1] == 168);
-        if (!privateAddress || uri.AbsolutePath != "/observation" ||
+        if (!(privateAddress || (allowLoopback && address.Equals(IPAddress.Loopback))) || uri.AbsolutePath != "/observation" ||
             !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment) ||
             !string.IsNullOrEmpty(uri.UserInfo))
         {
-            error = "delivery.endpoint must be a private IPv4 /observation URL without credentials, query, or fragment.";
+            error = "delivery.endpoint must be a private IPv4 /observation URL (or explicitly enabled 127.0.0.1) without credentials, query, or fragment.";
             return false;
         }
         endpoint = uri;

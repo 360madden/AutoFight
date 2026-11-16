@@ -22,6 +22,7 @@ void Test(string name, Action action)
 }
 
 GuestWireSpecs.Run(Test, Check);
+TargetVitalsV2Specs.Run(Test, Check);
 
 Console.WriteLine($"AutoFight guest reader specs: {passed} passed, {failed} failed.");
 return failed == 0 ? 0 : 1;

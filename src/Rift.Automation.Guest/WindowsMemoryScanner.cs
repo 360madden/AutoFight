@@ -18,6 +18,7 @@ public sealed record LiveScanResult(
     string? Reason)
 {
     public IReadOnlyList<LiveCandidateRegion> CandidateRegions { get; init; } = [];
+    public IReadOnlyList<ReadOnlyMemory<byte>> TargetVitalsCandidates { get; init; } = [];
 }
 
 public sealed record LiveCandidateRegion(
@@ -119,6 +120,7 @@ public static class WindowsMemoryScanner
         {
             var ordered = regions.Distinct().OrderBy(region => region.BaseAddress.ToInt64()).ToArray();
             var accumulator = new EnvelopeCandidateAccumulator(challenge);
+            var targetVitals = new TargetVitalsV2CandidateAccumulator(challenge);
             var buffer = GC.AllocateUninitializedArray<byte>(ChunkBytes);
             long scannedBytes = 0;
             LiveCandidateRegion? previous = null;
@@ -132,7 +134,10 @@ public static class WindowsMemoryScanner
                     return Incomplete("scope-drifted", plannedBytes, scannedBytes, ordered.Length, stopwatch.Elapsed,
                         $"Candidate region metadata changed at 0x{region.BaseAddress.ToInt64():X}.", accumulator);
                 if (previous is null || previous.BaseAddress.ToInt64() + previous.Size != region.BaseAddress.ToInt64())
+                {
                     accumulator.ResetMemoryBoundary();
+                    targetVitals.ResetMemoryBoundary();
+                }
 
                 long offset = 0;
                 while (offset < region.Size)
@@ -160,7 +165,8 @@ public static class WindowsMemoryScanner
                             $"ReadProcessMemory failed at 0x{address.ToInt64():X}: {detail}", accumulator);
                     }
                     accumulator.Feed(buffer.AsSpan(0, count));
-                    if (accumulator.BudgetExceeded)
+                    targetVitals.Feed(buffer.AsSpan(0, count));
+                    if (accumulator.BudgetExceeded || targetVitals.BudgetExceeded)
                         return Incomplete("candidate-budget-exceeded", plannedBytes, scannedBytes + count, ordered.Length,
                             stopwatch.Elapsed, "Envelope endpoint or valid-candidate budget was exceeded.", accumulator);
                     scannedBytes += count;
@@ -172,8 +178,9 @@ public static class WindowsMemoryScanner
                 previous = region;
             }
 
-            return new(true, "complete", plannedBytes, scannedBytes, ordered.Length, stopwatch.Elapsed,
-                accumulator.ValidCandidates, accumulator.EndpointCandidateCount, accumulator.MalformedCandidateCount, null);
+            return new LiveScanResult(true, "complete", plannedBytes, scannedBytes, ordered.Length, stopwatch.Elapsed,
+                accumulator.ValidCandidates, accumulator.EndpointCandidateCount, accumulator.MalformedCandidateCount, null)
+            { TargetVitalsCandidates = targetVitals.Candidates };
         }
         catch (OperationCanceledException)
         {
@@ -228,6 +235,7 @@ public static class WindowsMemoryScanner
         }
 
         var accumulator = new EnvelopeCandidateAccumulator(challenge);
+        var targetVitals = new TargetVitalsV2CandidateAccumulator(challenge);
         var buffer = GC.AllocateUninitializedArray<byte>(ChunkBytes);
         long scannedBytes = 0;
         LiveCandidateRegion? previous = null;
@@ -239,6 +247,7 @@ public static class WindowsMemoryScanner
             if (previous is null || previous.BaseAddress.ToInt64() + previous.Size != region.BaseAddress.ToInt64())
             {
                 accumulator.ResetMemoryBoundary();
+                targetVitals.ResetMemoryBoundary();
                 contiguousTailRegions.Clear();
                 contiguousTailBytes = 0;
             }
@@ -277,13 +286,14 @@ public static class WindowsMemoryScanner
                 }
                 var candidateCountBefore = accumulator.ValidCandidates.Count;
                 accumulator.Feed(buffer.AsSpan(0, count));
+                targetVitals.Feed(buffer.AsSpan(0, count));
                 if (accumulator.ValidCandidates.Count > candidateCountBefore)
                 {
                     candidateRegions.Add(region);
                     foreach (var tailRegion in contiguousTailRegions)
                         candidateRegions.Add(tailRegion);
                 }
-                if (accumulator.BudgetExceeded)
+                if (accumulator.BudgetExceeded || targetVitals.BudgetExceeded)
                     return new(Incomplete("candidate-budget-exceeded", plannedBytes, scannedBytes + count, regions.Count,
                         stopwatch.Elapsed, "Envelope endpoint or valid-candidate budget was exceeded.", accumulator), null);
                 scannedBytes += count;
@@ -315,7 +325,8 @@ public static class WindowsMemoryScanner
             accumulator.MalformedCandidateCount,
             null)
         {
-            CandidateRegions = candidateRegions.OrderBy(region => region.BaseAddress.ToInt64()).ToArray()
+            CandidateRegions = candidateRegions.OrderBy(region => region.BaseAddress.ToInt64()).ToArray(),
+            TargetVitalsCandidates = targetVitals.Candidates
         }, null);
     }
 

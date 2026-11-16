@@ -55,7 +55,21 @@ public sealed class StandaloneTelemetryHttpListener : IDisposable
     {
     }
 
-    // The only nonprivate-host bind seam is internal and used by offline tests.
+    /// <summary>Production same-host observation receiver. Loopback only, fixed port,
+    /// token-authenticated, no gameplay command endpoint.</summary>
+    public static StandaloneTelemetryHttpListener CreateLocal(
+        int port,
+        string deliveryToken,
+        Func<ReadOnlyMemory<byte>, string, string, DateTimeOffset, bool> accept,
+        TimeProvider? timeProvider = null)
+    {
+        if (port is < 1024 or > 65535)
+            throw new ArgumentOutOfRangeException(nameof(port));
+        return new("127.0.0.1", port, "127.0.0.1", deliveryToken,
+            accept, timeProvider, allowLoopback: true);
+    }
+
+    // The ephemeral-port seam remains internal and is used by offline tests.
     internal static StandaloneTelemetryHttpListener CreateLoopbackForTests(
         string token,
         Func<ReadOnlyMemory<byte>, string, string, DateTimeOffset, bool> accept,
@@ -81,7 +95,7 @@ public sealed class StandaloneTelemetryHttpListener : IDisposable
             expectedGuestIpv4, nameof(expectedGuestIpv4), allowLoopback);
 
         if ((!allowLoopback && port is < 1024 or > 65535) ||
-            (allowLoopback && port != 0))
+            (allowLoopback && port is < 0 or > 65535))
             throw new ArgumentOutOfRangeException(nameof(port));
 
         if (deliveryToken is null ||

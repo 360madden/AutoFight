@@ -104,6 +104,7 @@ VmBridgeSpecs.Run(Test, Check);
 VmTelemetrySpecs.Run(Test, Check);
 StandaloneTelemetrySpecs.Run(Test, Check);
 StandaloneTelemetryHttpSpecs.Run(Test, Check);
+PhysicalTelemetryIngestSpecs.Run(Test, Check);
 StandaloneTelemetryHostSessionSpecs.Run(Test, Check);
 StandaloneTelemetryHostConfigurationSpecs.Run(Test, Check);
 StandaloneTelemetryQualificationSpecs.Run(Test, Check);
