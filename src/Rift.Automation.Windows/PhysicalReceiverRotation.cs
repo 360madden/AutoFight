@@ -98,7 +98,14 @@ public sealed class PhysicalReceiverRotation : IAsyncDisposable
         }
         if (stop is null) return;
         stop.Cancel();
-        try { if (running is not null) await running; }
+        try
+        {
+            if (running is not null) await running;
+        }
+        catch (OperationCanceledException) when (stop.IsCancellationRequested)
+        {
+            // The listener was deliberately stopped during rotation or shutdown.
+        }
         finally { stop.Dispose(); }
     }
 
