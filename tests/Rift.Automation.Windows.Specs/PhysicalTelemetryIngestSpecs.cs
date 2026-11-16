@@ -26,10 +26,32 @@ internal static class PhysicalTelemetryIngestSpecs
             Directory.CreateDirectory(directory);
             try
             {
-                var warning = PhysicalAddonReloadPreflight.Inspect(37928, directory);
+                var warning = PhysicalAddonReloadPreflight.InspectFilesAtStart(directory, DateTime.UtcNow);
                 check(warning is not null && warning.Contains("missing"), "missing addon files reported");
             }
             finally { Directory.Delete(directory); }
+        });
+        test("Physical addon timestamp preflight distinguishes post-start files without claiming reload", () =>
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "af-addon-time-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            try
+            {
+                var start = new DateTime(2026, 11, 15, 12, 0, 0, DateTimeKind.Utc);
+                foreach (var name in new[] { "RiftAddon.toc", "main.lua", "target_vitals_v2.lua" })
+                {
+                    var path = Path.Combine(directory, name);
+                    File.WriteAllText(path, "test");
+                    File.SetLastWriteTimeUtc(path, start.AddMinutes(-1));
+                }
+                check(PhysicalAddonReloadPreflight.InspectFilesAtStart(directory, start) is null,
+                    "pre-start files do not trigger warning");
+                File.SetLastWriteTimeUtc(Path.Combine(directory, "main.lua"), start.AddMinutes(1));
+                var warning = PhysicalAddonReloadPreflight.InspectFilesAtStart(directory, start);
+                check(warning is not null && warning.Contains("main.lua") &&
+                    warning.Contains("cannot prove"), "post-start change warns without claiming loaded state");
+            }
+            finally { Directory.Delete(directory, true); }
         });
         test("Physical coordinator refuses invalid reader executable before launch", () =>
         {
