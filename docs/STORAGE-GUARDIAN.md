@@ -17,9 +17,14 @@ From `C:\work\AutoFight`:
 
 # Read-only list of potential old .NET build-file cleanup candidates
 .\scripts\Storage-Guardian.ps1 -Mode Preview -MinimumAgeDays 14
+
+# Optional automation-friendly audit: nonzero exit if warning or critical
+.\scripts\Storage-Guardian.ps1 -Mode Audit -FailOnThreshold
 ```
 
-The default audit covers **all real files under the project root** (including unexpected top-level folders), grouping size by top-level directory. It does not follow junctions or symbolic links. It reports `Warning` at **2,048 MiB** and `Critical` at **5,120 MiB**, with adjustable `-WarningMiB` and `-CriticalMiB` thresholds. These statuses print to the console; they are not automatic notifications or enforced quotas.
+The default audit covers **all real files under the project root** (including unexpected top-level folders), grouping size by top-level directory. It does not follow junctions or symbolic links. It reports `Warning` at **2,048 MiB** and `Critical` at **5,120 MiB**, with adjustable `-WarningMiB` and `-CriticalMiB` thresholds. These statuses print to the console; they are not automatic notifications or enforced quotas. **`-FailOnThreshold`** is an opt-in Audit-only switch that returns a failing process exit status at either threshold. It is intended for a future monitoring task; none is installed.
+
+The scanner streams file entries rather than holding a full file inventory in memory, with independent defaults of **250,000 files** (`-ScanFileLimit`) and **100,000 directories** (`-ScanDirectoryLimit`). Exceeding either limit fails the audit without reporting incomplete totals, writing history, or starting cleanup. Limits are configurable for large checkouts.
 
 `-RecordHistory` writes only `artifacts/local/storage-guardian/history.json`, a path excluded by Git. The JSON history is limited to **52 samples** and subsequent recordings show growth since the previous sample. Corrupt, oversized, or linked history is rejected without overwriting it. The default Audit mode does not write anything.
 
@@ -41,17 +46,17 @@ Nothing in `artifacts/`, `.git/`, ordinary source, documentation or private capt
 .\tests\scripts\Test-Storage-Guardian.ps1
 ```
 
-Tests create a separate, uniquely named **disposable** fixture under ignored `artifacts/local/storage-guardian-test-fixtures`. They test: audit/preview safety, rejected unauthorized cleanup, exact file-age and project-directory eligibility, junction protection, source/Git/private-data preservation, actual deletion of **fixture files only**, Git-tracked file protection, history bounds/corruption checks, and warning thresholds.
+Tests create a separate, uniquely named **disposable** fixture under ignored `artifacts/local/storage-guardian-test-fixtures`. They test: audit/preview safety, rejected unauthorized cleanup, bounded streaming scan failures, exact checkout validation, file-age/project-directory eligibility, junction protection, source/Git/private-data preservation, actual deletion of **fixture files only**, Git-tracked file protection, history bounds/corruption checks, and warning/critical thresholds with optional failing exit status.
 
 ### Verified November 16 evidence
 
-- **27/27 regression assertions PASSED, 0 skipped** using Windows PowerShell.
-- Real read-only Preview PASSED: **930.28 MiB** for the whole repository at the time of measurement, including 1,293 stale generated-file candidates totaling **526.24 MiB**. **None was deleted.**
+- **44/44 regression assertions PASSED, 0 skipped** using Windows PowerShell, including bounded file/directory scans and threshold failure statuses.
+- Real read-only Preview PASSED: **930.31 MiB** for the whole repository at the time of measurement, including 1,293 stale generated-file candidates totaling **526.24 MiB**. **None was deleted.**
 - First recorded local history sample: **930.23 MiB**, before the audit was broadened to include repository-root files.
 - Full .NET 10 Release build passed with **0 warnings/errors**; **173 Core + 232 Windows + 39 Guest = 444/444 specs**, plus **7/7 WPF nonshown smoke checks**, all passed (no application source changed).
 - PowerShell parser reported **0 syntax errors**; PSScriptAnalyzer was unavailable.
-- **Independent elevated code/architecture review is pending.** No GitHub integration or weekly scheduling has yet been performed.
+- GitHub draft pull request [#1](https://github.com/360madden/AutoFight/pull/1) contains this review candidate; **independent elevated code/architecture review is still pending**. No merge or weekly scheduling has been performed.
 
 ## Current limits and next stage
 
-There is **no automatic deletion**, OS task registration, external notification, hard storage quota, or evidence-archive policy. Only the local opt-in history tracks changes across runs. The recommended later stage is **read-only weekly monitoring** after independent review. Artifact retention should receive separate per-folder rules; never delete raw research evidence on a simple age threshold.
+There is **no automatic deletion**, OS task registration, external notification, hard storage quota, or evidence-archive policy. The optional nonzero threshold exit code makes a future scheduler integration possible without relying on text parsing. Only the local opt-in history tracks changes across runs. The recommended later stage is **read-only weekly monitoring** after independent review. Artifact retention should receive separate per-folder rules; never delete raw research evidence on a simple age threshold.

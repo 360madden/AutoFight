@@ -6,8 +6,11 @@ param(
     [string]$ConfirmCleanup = '',
     [string]$Root = '',
     [switch]$RecordHistory,
+    [switch]$FailOnThreshold,
     [ValidateRange(1,1000000)][int]$WarningMiB = 2048,
-    [ValidateRange(1,1000000)][int]$CriticalMiB = 5120
+    [ValidateRange(1,1000000)][int]$CriticalMiB = 5120,
+    [ValidateRange(1,1000000)][int]$ScanFileLimit = 250000,
+    [ValidateRange(1,1000000)][int]$ScanDirectoryLimit = 100000
 )
 
 Set-StrictMode -Version Latest
@@ -15,6 +18,7 @@ $ErrorActionPreference = 'Stop'
 
 if ($CriticalMiB -le $WarningMiB) { throw 'CriticalMiB must exceed WarningMiB.' }
 if ($RecordHistory -and $Mode -ne 'Audit') { throw 'History can be recorded only by Audit mode.' }
+if ($FailOnThreshold -and $Mode -ne 'Audit') { throw 'Threshold exit status is supported only by Audit mode.' }
 if ($Mode -eq 'Clean' -and $ConfirmCleanup -cne 'DELETE_STALE_BUILD_FILES') {
     throw 'Clean requires -ConfirmCleanup DELETE_STALE_BUILD_FILES. Run Preview first.'
 }
@@ -37,14 +41,26 @@ function Get-SafeFiles([string]$Directory) {
     if (-not (Test-Path -LiteralPath $Directory -PathType Container)) { return }
     $stack = New-Object 'System.Collections.Generic.Stack[string]'
     $stack.Push($Directory)
+    [int]$visitedDirectories = 0
     while ($stack.Count -gt 0) {
+        $visitedDirectories++
+        if ($visitedDirectories -gt $ScanDirectoryLimit) {
+            throw 'Storage directory scan limit exceeded; no partial status or cleanup permitted.'
+        }
         $here = $stack.Pop()
         $currentDir = Get-Item -LiteralPath $here -Force -ErrorAction Stop
         if (Test-Reparse $currentDir) { continue }
-        foreach ($entry in (Get-ChildItem -LiteralPath $here -Force -ErrorAction Stop)) {
-            if (Test-Reparse $entry) { continue }
-            if ($entry.PSIsContainer) { $stack.Push($entry.FullName) }
-            elseif ($entry -is [IO.FileInfo]) { Write-Output $entry }
+        # Stream each directory. Bound queued directories *before* the stack grows.
+        Get-ChildItem -LiteralPath $here -Force -ErrorAction Stop | ForEach-Object {
+            $entry = $_
+            if (-not (Test-Reparse $entry)) {
+                if ($entry.PSIsContainer) {
+                    if ($visitedDirectories + $stack.Count -ge $ScanDirectoryLimit) {
+                        throw 'Storage directory scan limit exceeded; no partial status or cleanup permitted.'
+                    }
+                    $stack.Push($entry.FullName)
+                } elseif ($entry -is [IO.FileInfo]) { Write-Output $entry }
+            }
         }
     }
 }
@@ -53,7 +69,14 @@ function Get-SafeFiles([string]$Directory) {
 # Root-level files are grouped as (root). Links/junctions are never followed.
 $metrics = @{}
 [long]$totalBytes = 0
-foreach ($file in (Get-SafeFiles $rootPath)) {
+[int]$auditedFileCount = 0
+# Stream file entries: avoid materializing millions of FileInfo objects in memory.
+Get-SafeFiles $rootPath | ForEach-Object {
+    $file = $_
+    $auditedFileCount++
+    if ($auditedFileCount -gt $ScanFileLimit) {
+        throw 'Storage audit file limit exceeded; no partial status or cleanup permitted.'
+    }
     $relativePath = $file.FullName.Substring($rootPath.Length + 1)
     $separator = $relativePath.IndexOf('\')
     $group = if ($separator -lt 0) { '(root)' } else { $relativePath.Substring(0, $separator) }
@@ -140,7 +163,12 @@ if ($RecordHistory) {
     }
     Write-Output ('Recorded one bounded history entry (max 52) in ignored local data.')
 }
-if ($Mode -eq 'Audit') { return }
+if ($Mode -eq 'Audit') {
+    if ($FailOnThreshold -and $level -ne 'Normal') {
+        throw ('Storage threshold exceeded: {0} at {1:N2} MiB.' -f $level, ($totalBytes / 1MB))
+    }
+    return
+}
 
 # Never clean tracked files, even if an operator force-added one under bin/obj.
 # A recognized Git checkout, rooted exactly at -Root, is required for preview/clean.
@@ -176,16 +204,20 @@ foreach ($tree in @('src','tests')) {
             $bucketPath = Join-Path $project.FullName $bucket
             if (-not (Test-Path -LiteralPath $bucketPath -PathType Container)) { continue }
             if (Test-Reparse (Get-Item -LiteralPath $bucketPath -Force)) { continue }
-            foreach ($file in (Get-SafeFiles $bucketPath)) {
-                if ($file.LastWriteTimeUtc -ge $cutoffUtc) { continue }
-                $repoRelative = $file.FullName.Substring($rootPath.Length + 1).Replace('\','/')
-                if ($trackedSet.Contains($repoRelative)) { continue }
-                if ($candidates.Count -ge 50000) { throw 'Candidate limit exceeded; no files removed.' }
-                $candidates.Add([pscustomobject]@{
-                    Path = $file.FullName
-                    Bytes = [long]$file.Length
-                    LastWriteTimeUtcTicks = $file.LastWriteTimeUtc.Ticks
-                })
+            # Stream generated files too; only eligible candidates are retained (capped).
+            Get-SafeFiles $bucketPath | ForEach-Object {
+                $file = $_
+                if ($file.LastWriteTimeUtc -lt $cutoffUtc) {
+                    $repoRelative = $file.FullName.Substring($rootPath.Length + 1).Replace('\','/')
+                    if (-not $trackedSet.Contains($repoRelative)) {
+                        if ($candidates.Count -ge 50000) { throw 'Candidate limit exceeded; no files removed.' }
+                        $candidates.Add([pscustomobject]@{
+                            Path = $file.FullName
+                            Bytes = [long]$file.Length
+                            LastWriteTimeUtcTicks = $file.LastWriteTimeUtc.Ticks
+                        })
+                    }
+                }
             }
         }
     }

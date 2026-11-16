@@ -67,18 +67,41 @@ try {
 
     $audit = Run-Guardian @{ Mode='Audit' }
     Assert ([bool]($audit -match 'status=Normal')) 'audit defaults to non-destructive normal status'
+    $healthyThreshold = Run-Guardian @{ Mode='Audit'; FailOnThreshold=$true }
+    Assert ([bool]($healthyThreshold -match 'status=Normal')) 'healthy strict-threshold audit succeeds'
     $preview = Run-Guardian @{ Mode='Preview' }
     Assert ([bool]($preview -match 'Stale generated-file candidates: 2 files')) 'preview recognizes only the two old generated files'
     Assert ((Test-Path -LiteralPath $oldBin) -and (Test-Path -LiteralPath $oldObj)) 'preview does not delete candidates'
     Assert (Denied @{ Mode='Clean' } 'Clean requires') 'clean without confirmation is denied'
     Assert (Denied @{ Mode='Clean'; ConfirmCleanup='wrong' } 'Clean requires') 'incorrect cleanup confirmation is denied'
     Assert (Denied @{ Mode='Preview'; RecordHistory=$true } 'History can be recorded only') 'preview cannot silently mutate history'
+    Assert (Denied @{ Mode='Preview'; FailOnThreshold=$true } 'Threshold exit status is supported only by Audit mode') 'strict threshold exit is audit-only'
     Assert (Denied @{ Mode='Audit'; WarningMiB=50; CriticalMiB=10 } 'CriticalMiB must exceed') 'inverted thresholds are denied'
     Assert (Denied @{ Mode='Audit'; MinimumAgeDays=0 } 'MinimumAgeDays') 'invalid retention age is denied'
+    Assert (Denied @{ Mode='Audit'; ScanFileLimit=0 } 'ScanFileLimit') 'invalid audit scan cap is denied'
+    Assert (Denied @{ Mode='Audit'; ScanDirectoryLimit=0 } 'ScanDirectoryLimit') 'invalid directory scan cap is denied'
+    Assert (Denied @{ Mode='Audit'; ScanDirectoryLimit=1 } 'Storage directory scan limit exceeded') 'over-limit directory audit fails safely'
+    Assert (Denied @{ Mode='Clean'; ConfirmCleanup='DELETE_STALE_BUILD_FILES'; ScanDirectoryLimit=1 } 'Storage directory scan limit exceeded') 'over-limit directory clean fails before deletion'
+    Assert (Denied @{ Mode='Audit'; ScanFileLimit=2 } 'Storage audit file limit exceeded') 'over-limit audit fails without reporting partial totals'
+    Assert (Denied @{ Mode='Preview'; ScanFileLimit=2 } 'Storage audit file limit exceeded') 'over-limit preview fails before making a cleanup inventory'
+    Assert (Denied @{ Mode='Clean'; ConfirmCleanup='DELETE_STALE_BUILD_FILES'; ScanFileLimit=2 } 'Storage audit file limit exceeded') 'over-limit clean fails before deleting any file'
+    Assert (Denied @{ Mode='Audit'; RecordHistory=$true; ScanFileLimit=2 } 'Storage audit file limit exceeded') 'over-limit audit cannot record inaccurate history'
+    Assert (-not (Test-Path -LiteralPath (Join-Path $fixture 'artifacts\local\storage-guardian\history.json'))) 'failed scan does not create history file'
     Assert ((Test-Path -LiteralPath $oldBin) -and (Test-Path -LiteralPath $oldObj)) 'denied operations preserve existing build files'
+    $fixtureGit = Join-Path $fixture '.git'
+    $fixtureGitOffline = Join-Path $fixture '.git-temporarily-hidden'
+    Move-Item -LiteralPath $fixtureGit -Destination $fixtureGitOffline -ErrorAction Stop
+    try {
+        Assert (Denied @{ Mode='Preview' } 'exact repository-root Git checkout') 'preview requires exact Git root rather than parent Git checkout'
+        Assert (Denied @{ Mode='Clean'; ConfirmCleanup='DELETE_STALE_BUILD_FILES' } 'exact repository-root Git checkout') 'clean requires exact Git root rather than parent Git checkout'
+    } finally {
+        Move-Item -LiteralPath $fixtureGitOffline -Destination $fixtureGit -ErrorAction Stop
+    }
 
     $outside = Join-Path $fixture 'outside\special-old.txt'
     Put-File $outside 'outside retained' 45
+    $auditExtra = Run-Guardian @{ Mode='Audit' }
+    Assert ([bool]($auditExtra -match 'outside')) 'unexpected top-level directory is counted in full audit'
     $junction = Join-Path $project 'bin\linked-external'
     try {
         $null = New-Item -ItemType Junction -Path $junction -Target (Split-Path -Parent $outside) -ErrorAction Stop
@@ -128,6 +151,12 @@ try {
     [IO.File]::WriteAllBytes($large,(New-Object 'byte[]' (1536 * 1024)))
     $warning = Run-Guardian @{ Mode='Audit'; WarningMiB=1; CriticalMiB=2 }
     Assert ([bool]($warning -match 'status=Warning')) 'configurable warning threshold catches disk growth'
+    Assert (Denied @{ Mode='Audit'; WarningMiB=1; CriticalMiB=2; FailOnThreshold=$true } 'Storage threshold exceeded: Warning') 'strict audit fails when warning limit exceeded'
+    $extraLarge = Join-Path $fixture 'artifacts\local\another-large.bin'
+    [IO.File]::WriteAllBytes($extraLarge,(New-Object 'byte[]' (768 * 1024)))
+    $critical = Run-Guardian @{ Mode='Audit'; WarningMiB=1; CriticalMiB=2 }
+    Assert ([bool]($critical -match 'status=Critical')) 'configurable critical threshold catches larger disk growth'
+    Assert (Denied @{ Mode='Audit'; WarningMiB=1; CriticalMiB=2; FailOnThreshold=$true } 'Storage threshold exceeded: Critical') 'strict audit fails when critical limit exceeded'
     Assert (Denied @{ Mode='Audit'; WarningMiB=1; CriticalMiB=1 } 'CriticalMiB must exceed') 'equal threshold values are rejected'
 } finally {
     # Delete only this test run's newly created GUID-named fixture; never project outputs.
