@@ -14,7 +14,8 @@ public sealed record LiveConfiguration(
     string? OutputPath,
     int FreshnessTimeoutSeconds,
     LiveDeliveryConfiguration? Delivery,
-    int? TargetProcessId = null)
+    int? TargetProcessId = null,
+    int InitialScanDelaySeconds = 0)
 {
     public const string FileName = "autofight-guest-reader.json";
 
@@ -76,6 +77,8 @@ public sealed record LiveConfiguration(
             throw new InvalidDataException("outputPath exceeds 1024 characters.");
         if (TargetProcessId is <= 0)
             throw new InvalidDataException("targetProcessId must be positive when supplied.");
+        if (InitialScanDelaySeconds is < 0 or > 120)
+            throw new InvalidDataException("initialScanDelaySeconds must be from 0 through 120.");
         Delivery?.Validate();
     }
 

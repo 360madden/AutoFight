@@ -269,6 +269,17 @@ internal static class GuestWireSpecs
                 "all printable ASCII boundaries match host and record ToString cannot leak token");
         });
 
+        test("Initial scan delay is optional and bounded for manual addon binding", () =>
+        {
+            var defaults = LiveConfiguration.Defaults;
+            check(defaults.InitialScanDelaySeconds == 0, "legacy behavior unchanged");
+            var maximum = defaults with { InitialScanDelaySeconds = 120 };
+            maximum.Validate();
+            check(Rejects(() => (defaults with { InitialScanDelaySeconds = -1 }).Validate()),
+                "negative delay rejected");
+            check(Rejects(() => (defaults with { InitialScanDelaySeconds = 121 }).Validate()),
+                "oversized delay rejected");
+        });
         test("Guest default config remains bounded and AutoFight-owned", () =>
         {
             var config = LiveConfiguration.Defaults;

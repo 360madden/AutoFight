@@ -62,6 +62,12 @@ internal static class Program
         var nonce = NewNonce();
         PrintSessionIdentity(instanceId, nonce);
         PrintBindingInstruction(nonce);
+        if (configuration.InitialScanDelaySeconds > 0)
+        {
+            Console.WriteLine($"Waiting {configuration.InitialScanDelaySeconds}s for explicit /afbind before the first memory scan.");
+            try { await Task.Delay(TimeSpan.FromSeconds(configuration.InitialScanDelaySeconds), cancellation.Token); }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { return 0; }
+        }
         var outputPath = configuration.ResolveOutputPath();
         using var delivery = new LiveDeliveryClient(configuration.Delivery);
         LiveAddonFreshnessTracker? tracker = null;
