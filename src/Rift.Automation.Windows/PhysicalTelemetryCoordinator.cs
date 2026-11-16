@@ -31,6 +31,16 @@ public static class PhysicalTelemetryCoordinator
             throw new InvalidDataException("Local receiver delivery endpoint required.");
         var token = delivery.GetProperty("token").GetString() ??
             throw new InvalidDataException("Delivery token missing.");
+        var roots = new[] { Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "OneDrive", "Documents") };
+        foreach (var rootPath in roots.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var addon = Path.Combine(rootPath, "RIFT", "Interface", "Addons", "AutoFight");
+            if (!Directory.Exists(addon)) continue;
+            var warning = PhysicalAddonReloadPreflight.Inspect(gameProcessId, addon);
+            if (warning is not null) Console.WriteLine("AutoFight addon preflight: " + warning);
+            break;
+        }
         var tracker = new PhysicalReaderSessionTracker();
         await using var receivers = new PhysicalReceiverRotation(tracker, gameProcessId, endpoint.Port, token);
         try

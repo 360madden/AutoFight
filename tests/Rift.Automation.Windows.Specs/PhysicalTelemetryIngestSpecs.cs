@@ -20,6 +20,17 @@ internal static class PhysicalTelemetryIngestSpecs
             check(rejected, "untracked session rejected");
             rotation.DisposeAsync().AsTask().GetAwaiter().GetResult();
         });
+        test("Physical addon preflight reports missing files without touching game", () =>
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "af-addon-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            try
+            {
+                var warning = PhysicalAddonReloadPreflight.Inspect(37928, directory);
+                check(warning is not null && warning.Contains("missing"), "missing addon files reported");
+            }
+            finally { Directory.Delete(directory); }
+        });
         test("Physical coordinator refuses invalid reader executable before launch", () =>
         {
             bool rejected = false;
