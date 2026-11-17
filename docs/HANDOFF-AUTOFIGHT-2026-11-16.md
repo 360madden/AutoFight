@@ -1,6 +1,14 @@
 # AutoFight — Continuation Handoff (2026-11-16 04:33 EST)
 
-## Newest offline checkpoint — 2026-11-16 22:18 EST
+## Newest offline checkpoint — 2026-11-16 22:25 EST
+
+- **Machine/repo:** AMD-DESKTOP, `C:\work\AutoFight`, `main`; previous clean pushed HEAD `697cad1`, reviewed code commit `4786c56`.
+- **Verified mismatch:** Planner's `CompletePreviewAttack` rejects an acknowledgement received later than dispatch +3000 ms, but `CombatOutcomeAssessor` had no corresponding acknowledgement bound while allowing a post-ack health observation within 10000 ms of dispatch. Independent cross-component test captured **182 passed + 1 expected RED**, then **183/183 Core GREEN** after adding a bounded acknowledgement guard.
+- **Contract:** +3000 ms accepted; +3001 ms rejected as `attempt-window-invalid`, without computing an effect. `ProvesCommandCausedEffect` remains permanently false. No player/game memory source is qualified and there is no action executor in this path.
+- **Validation:** Core 183/183, Windows 236/236, Guest 57/57 = **476/476**; WPF smoke 7/7; .NET 10 Release build 0 warnings/errors; diff check exit 0 (LF/CRLF notices only). Independent elevated `/root/combat_ack_deadline_review` **PASS no P0/P1/P2** against exact source/test hashes and RED/GREEN logs.
+- **Next offline M8 step:** a pure, single-owner, one-attempt coordinator composed from the existing `StationaryCombatPlanner`, `CombatOutcomeAssessor` and `CombatEffectAssessor`, preserving no automatic retry or rearm. Test stop/source loss, late ACK, target/session changes and bounded post-ack observation. No live game input or scanning.
+
+## Prior offline checkpoint — 2026-11-16 22:18 EST
 
 - **Repository:** independently verified `AMD-DESKTOP`, `C:\work\AutoFight`, `main`, pushed previous `8ddb412`; new reviewed source commit `ffec2df`.
 - **Production-owned diagnostic:** GuestReader now creates `TargetVitalsProducerProgressTracker` on each stable process attachment and compares selected AFT2 reports from *both* full and bounded scoped scans. `Program` adds `targetVitalsProgress` to both live delivery and atomic local snapshot, and prints a concise console label; the physical host tolerates this additive root field without consuming or qualifying it.
