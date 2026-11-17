@@ -184,6 +184,24 @@ internal static class TargetVitalsV2Specs
             catch (InvalidDataException) { rejected = true; }
             check(rejected, "legacy payload not target vitals");
         });
+        test("target vitals v2 scoped scan deadline rejects post-decode overrun", () =>
+        {
+            var source = new LiveScanResult(true, "complete", 1024, 1024, 1,
+                TimeSpan.FromMilliseconds(90), [new ReadOnlyMemory<byte>([1, 2])], 1, 0, null)
+            { TargetVitalsCandidates = [new ReadOnlyMemory<byte>([3, 4])] };
+            var expired = WindowsMemoryScanner.FinalizeScopedCandidateScan(
+                source, TimeSpan.FromMilliseconds(101), TimeSpan.FromMilliseconds(100));
+            check(!expired.Completed && expired.Status == "time-budget-exceeded" &&
+                expired.PlannedBytes == 1024 && expired.ScannedBytes == 1024 &&
+                expired.Elapsed == TimeSpan.FromMilliseconds(101) &&
+                expired.Candidates.Count == 0 && expired.TargetVitalsCandidates.Count == 0,
+                "completion cannot expose a candidate after final decode overruns deadline");
+            var boundary = WindowsMemoryScanner.FinalizeScopedCandidateScan(
+                source, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(100));
+            check(boundary.Completed && boundary.TargetVitalsCandidates.Count == 1 &&
+                boundary.Elapsed == TimeSpan.FromMilliseconds(100),
+                "deadline equality remains permitted without losing candidate diagnostics");
+        });
         test("target vitals v2 scanner retains AFT2-only fast-scan region", () =>
         {
             const string nonce = "0123456789abcdef0123456789abcdef";

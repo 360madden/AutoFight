@@ -183,9 +183,11 @@ public static class WindowsMemoryScanner
                 previous = region;
             }
 
-            return new LiveScanResult(true, "complete", plannedBytes, scannedBytes, ordered.Length, stopwatch.Elapsed,
+            var completed = new LiveScanResult(true, "complete", plannedBytes, scannedBytes, ordered.Length, stopwatch.Elapsed,
                 accumulator.ValidCandidates, accumulator.EndpointCandidateCount, accumulator.MalformedCandidateCount, null)
             { TargetVitalsCandidates = targetVitals.Candidates };
+            cancellationToken.ThrowIfCancellationRequested();
+            return FinalizeScopedCandidateScan(completed, stopwatch.Elapsed, maxScanTime);
         }
         catch (OperationCanceledException)
         {
@@ -199,6 +201,20 @@ public static class WindowsMemoryScanner
         {
             NativeMethods.CloseHandle(handle);
         }
+    }
+
+    // A final deadline check must run after the last candidate collection is materialized.
+    // An expired scoped read must not publish a completed or partially trusted frame.
+    internal static LiveScanResult FinalizeScopedCandidateScan(
+        LiveScanResult completed,
+        TimeSpan elapsed,
+        TimeSpan maxScanTime)
+    {
+        ArgumentNullException.ThrowIfNull(completed);
+        if (elapsed > maxScanTime)
+            return Incomplete("time-budget-exceeded", completed.PlannedBytes, completed.ScannedBytes,
+                completed.RegionCount, elapsed, "The final scoped memory read or candidate decode exceeded the scan time budget.");
+        return completed with { Elapsed = elapsed };
     }
 
     internal static LiveScanResult RunWithPartialCopyRetry(
