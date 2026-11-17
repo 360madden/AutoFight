@@ -1,5 +1,15 @@
 # AutoFight — Continuation Handoff (2026-11-16 04:33 EST)
 
+## Newest offline checkpoint — 2026-11-16 21:40 EST
+
+- **Machine:** verified AMD-DESKTOP, `C:\work\AutoFight` on `main`; prior reviewed provenance commit `bf79992` pushed and synchronized before this new change.
+- **AFT2 retained-frame ambiguity:** `TargetVitalsV2CandidateSelector` now rejects a completed candidate set with different producer epochs, player IDs, target IDs, sequence-inverted producer clocks, contradictory copies or more than 256 candidates. Identical duplicates and valid unordered copies still work. This remains candidate-only evidence, never producer freshness or authorization.
+- **Fast-scan diagnostic loss repaired offline:** `WindowsMemoryScanner.ScanAttempt` previously remembered only legacy RR2A1-containing regions, so a separate AFT2-only region could disappear during scoped fast scans. Extracted bounded `FeedAndTrackCandidateRegions` feeds both existing accumulators and retains the current+contiguous-tail regions when either finds a valid candidate. No new scan, controller or runtime service; fast mode still requires RR2A1 anchor and obeys existing budgets.
+- **Validation:** 182 Core + 234 Windows + 54 Guest = **470/470** deterministic offline specs, **7/7** WPF nonshown smoke, .NET 10 Release **0 warnings/errors**. Selector and scanner independent elevated code reviews both **PASS, zero P0/P1**. One Workbridge output poll timed out, but existing job ID reconciliation verified exit 0 without rerunning it.
+- **Comments:** corrected stale Lua/accumulator comments that mistakenly described the AFT2 producer as not loaded/scanned; source code behavior unchanged by those comments.
+- **Unresolved gates:** no current live target-health source, verified addon producer progression, action feedback or combat. Mixed historical memory copies can intentionally suppress diagnostics. Scoped scanner's pre-existing final post-decode deadline check remains an offline reliability follow-up. All live RIFT/process/VM input/scan interactions remain untouched in this checkpoint.
+- **Next:** independent review is complete; perform scoped Git commit and verify remote before optional push. Then address the bounded scoped-scan deadline condition offline, or schedule a separately identified read-only live qualification when Joey chooses.
+
 ## Newest offline checkpoint — 2026-11-16 21:30 EST
 
 - **Machine:** independently verified Workbridge `AMD-DESKTOP` v0.16.5-dev, `C:\work\AutoFight`, clean `main...origin/main` before the new changes; previous pushed HEAD `724ffd1`.

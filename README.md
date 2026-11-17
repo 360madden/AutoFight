@@ -53,6 +53,7 @@ AutoFight is a modular **C# / .NET 10 / WPF** Windows project exploring a reliab
 | Physical native read-only XYZ provider | 🟢 | AutoFight-owned reader observed two different XYZ positions ~55.84 units apart under unchanged game/player identity; later 4/4 samples matched the new position. Value-change observed, producer freshness and action cause unqualified |
 | Physical XYZ WPF and coordinate comparisons | 🟢 | First/default on-demand tab with sticky change count, last 20 timestamped deltas, bounded 600-outcome trace, and M5 A/B repeated-coordinate assessment under pinned source; 7 synthetic smoke categories passed, visible click-through pending |
 | Physical XYZ headless CLI recorder | 🟢 | M7 explicit 10–120s exact-PID/start read-only capture, ~1 Hz, new no-overwrite JSON, M5 A/B assessment, no game input; 10 deterministic tests and independent review pass; Joey-operated live A→B capture pending |
+| AFT2 target-health diagnostic | 🟡 | Owned Lua/GuestReader/physical-host candidate path retains identity, HP and provenance; synthetic-only, never qualified for combat |
 | Targeting, navigation, spell rotation | 🔴 | Future work; no qualified autonomous combat |
 
 **Interpreting the evidence:** A network-delivered Reader status is **not** necessarily a game telemetry frame. A game input acknowledgment is **not** proof the character moved. The project deliberately records these as separate acceptance gates.
