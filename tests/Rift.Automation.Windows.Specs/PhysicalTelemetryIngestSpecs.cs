@@ -220,6 +220,93 @@ internal static class PhysicalTelemetryIngestSpecs
             check(ingest.ReadFresh(now.AddSeconds(2), TimeSpan.FromSeconds(1)) is null, "expired");
             check(ingest.ReadFresh(now.AddSeconds(-1), TimeSpan.FromSeconds(1)) is null, "future receipt");
         });
+        test("Physical ingest retains full target-vitals provenance without granting source authority", () =>
+        {
+            var id = Guid.NewGuid();
+            var nonce = new string('a', 32);
+            var token = new string('b', 40);
+            var binding = new PhysicalTelemetryBinding(id, nonce, 1234, 638000000000000000,
+                @"C:\RIFT\rift_x64.exe", new string('c', 64));
+            var ingest = new PhysicalTelemetryIngest(binding, token);
+            byte[] Frame(long outer, object? candidate) => JsonSerializer.SerializeToUtf8Bytes(new {
+                schemaVersion = 1, instanceId = id, nonce, sequence = outer, readerStatus = "running",
+                target = new {
+                    processId = binding.GameProcessId,
+                    processStartUtcTicks = binding.GameProcessStartUtcTicks,
+                    executablePath = binding.GameExecutablePath,
+                    executableSha256 = binding.GameExecutableSha256,
+                    readerSessionNonce = nonce
+                },
+                targetVitalsCandidate = candidate
+            });
+            var candidate = new {
+                status = "candidate-unqualified", candidateCount = 1, sequence = 7,
+                playerId = "player-1", targetId = "enemy-2", epoch = 3,
+                producerClock = 12.5, health = 40.0, healthMax = 100.0,
+                envelopeSha256 = new string('A', 64), frameSha256 = new string('B', 64)
+            };
+            var now = new DateTimeOffset(2026, 11, 16, 20, 0, 0, TimeSpan.Zero);
+            check(ingest.Accept(Frame(1, candidate), token, "127.0.0.1", now), "first full candidate delivered");
+            var value = ingest.Latest?.TargetVitals;
+            check(value is not null && value.PlayerId == "player-1" && value.TargetId == "enemy-2" &&
+                value.Epoch == 3 && value.Sequence == 7 && value.ProducerClock == 12.5 &&
+                value.Health == 40 && value.HealthMax == 100 &&
+                value.EnvelopeSha256.Length == 64 && value.FrameSha256.Length == 64 &&
+                !value.SourceQualified, "typed candidate complete but remains unqualified");
+            check(ingest.Accept(Frame(2, candidate), token, "127.0.0.1", now.AddMilliseconds(100)),
+                "outer transport advances");
+            check(ingest.Latest?.TargetVitals is { Sequence: 7, ProducerClock: 12.5, SourceQualified: false },
+                "repeated producer data not promoted by transport");
+            check(ingest.ReadFresh(now.AddSeconds(3), TimeSpan.FromSeconds(1)) is null,
+                "host receipt freshness expires independently");
+            check(ingest.Accept(Frame(3, null), token, "127.0.0.1", now.AddSeconds(4)), "missing next candidate");
+            check(ingest.Latest?.TargetVitals is null &&
+                ingest.Latest?.TargetVitalsSequence is null, "no stale candidate exposure");
+        });
+        test("Physical ingest rejects partial, malformed and unknown target-vitals provenance", () =>
+        {
+            var id = Guid.NewGuid();
+            var nonce = new string('a', 32);
+            var token = new string('b', 40);
+            var binding = new PhysicalTelemetryBinding(id, nonce, 1234, 638000000000000000,
+                @"C:\RIFT\rift_x64.exe", new string('c', 64));
+            var ingest = new PhysicalTelemetryIngest(binding, token);
+            byte[] Frame(object candidate) => JsonSerializer.SerializeToUtf8Bytes(new {
+                schemaVersion = 1, instanceId = id, nonce, sequence = 1, readerStatus = "running",
+                target = new {
+                    processId = binding.GameProcessId,
+                    processStartUtcTicks = binding.GameProcessStartUtcTicks,
+                    executablePath = binding.GameExecutablePath,
+                    executableSha256 = binding.GameExecutableSha256,
+                    readerSessionNonce = nonce
+                },
+                targetVitalsCandidate = candidate
+            });
+            var valid = new {
+                status = "candidate-unqualified", candidateCount = 1, sequence = 7,
+                playerId = "p", targetId = "t", epoch = 2, producerClock = 12.5,
+                health = 40.0, healthMax = 100.0,
+                envelopeSha256 = new string('A', 64), frameSha256 = new string('B', 64)
+            };
+            var now = DateTimeOffset.UtcNow;
+            var partial = new { valid.status, valid.sequence, valid.playerId, valid.health };
+            check(!ingest.Accept(Frame(partial), token, "127.0.0.1", now), "partial tuple");
+            check(!ingest.Accept(Frame(valid with { health = 140.0 }), token, "127.0.0.1", now), "invalid HP");
+            check(!ingest.Accept(Frame(valid with { epoch = -1 }), token, "127.0.0.1", now), "invalid epoch");
+            check(!ingest.Accept(Frame(valid with { producerClock = -1.0 }), token, "127.0.0.1", now), "invalid clock");
+            check(!ingest.Accept(Frame(valid with { frameSha256 = "bad" }), token, "127.0.0.1", now), "bad hash");
+            check(!ingest.Accept(Frame(valid with { candidateCount = 257 }), token, "127.0.0.1", now),
+                "count above valid candidate cap");
+            var unknown = System.Text.Json.Nodes.JsonNode.Parse(
+                JsonSerializer.Serialize(valid))!.AsObject();
+            unknown["unexpected"] = 1;
+            check(!ingest.Accept(Frame(unknown), token, "127.0.0.1", now), "unknown field");
+            check(ingest.Latest is null, "invalid reports never recorded");
+            check(ingest.Accept(Frame(new { status = "candidate-unqualified", sequence = 7 }),
+                token, "127.0.0.1", now), "legacy status-only compatible");
+            check(ingest.Latest?.TargetVitals is null && ingest.Latest?.TargetVitalsSequence == 7,
+                "legacy candidate never gains invented provenance");
+        });
         test("Physical ingest does not expose vitals after game identity becomes unavailable", () =>
         {
             var id = Guid.NewGuid();

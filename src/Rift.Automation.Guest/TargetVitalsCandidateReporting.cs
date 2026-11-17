@@ -2,7 +2,16 @@ namespace Rift.Automation.Guest.Live;
 
 /// <summary>Address-free candidate discovery report, not a qualified health source.</summary>
 public sealed record TargetVitalsCandidateDiagnostic(
-    string Status, int CandidateCount, long? Sequence, string? TargetId, double? Health, double? HealthMax);
+    string Status, int CandidateCount, long? Sequence, string? TargetId, double? Health, double? HealthMax)
+{
+    // Producer identity and exact selected bytes, retained for future source
+    // qualification. These fields are diagnostics, never action authority.
+    public string? PlayerId { get; init; }
+    public long? Epoch { get; init; }
+    public double? ProducerClock { get; init; }
+    public string? EnvelopeSha256 { get; init; }
+    public string? FrameSha256 { get; init; }
+}
 
 public static class TargetVitalsCandidateReporting
 {
@@ -19,6 +28,13 @@ public static class TargetVitalsCandidateReporting
                 scan.TargetVitalsCandidates.Count, null, null, null, null);
         var value = selected.Observation;
         return new("candidate-unqualified", scan.TargetVitalsCandidates.Count,
-            value.Sequence, value.TargetId, value.Health, value.HealthMax);
+            value.Sequence, value.TargetId, value.Health, value.HealthMax)
+        {
+            PlayerId = value.PlayerId,
+            Epoch = value.Epoch,
+            ProducerClock = value.Clock,
+            EnvelopeSha256 = selected.EnvelopeSha256,
+            FrameSha256 = selected.FrameSha256
+        };
     }
 }

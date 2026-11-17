@@ -96,6 +96,69 @@ internal static class TargetVitalsV2Specs
             check(!intake.TryAccept(Frame("{}"), 1600, out _), "fault");
             check(!intake.TryGetFresh(1600, 500, out _), "fault blocks cached sample");
         });
+        test("target vitals v2 expired freshness cannot revive after clock rollback", () =>
+        {
+            var intake = new TargetVitalsV2Intake();
+            check(intake.TryAccept(Frame(Good), 1000, out _), "initial candidate");
+            check(!intake.TryGetFresh(1501, 500, out _), "expired");
+            check(!intake.TryGetFresh(1500, 500, out var revived) &&
+                revived is null && intake.Faulted && intake.LastAccepted is null,
+                "backward query latches and clears stale data");
+            check(!intake.TryAccept(Frame(Good), 1600, out _), "latched reader refuses further frames");
+            intake.Reset();
+            check(intake.TryAccept(Frame(Good), 800, out _) &&
+                intake.TryGetFresh(800, 500, out _), "reset permits a new lower-clock session");
+        });
+        test("target vitals v2 rejects receipt timestamp older than prior freshness check", () =>
+        {
+            var intake = new TargetVitalsV2Intake();
+            check(intake.TryAccept(Frame(Good), 1000, out _), "initial");
+            check(intake.TryGetFresh(1100, 500, out _), "freshness probe");
+            var next = System.Text.Json.Nodes.JsonNode.Parse(Good)!.AsObject();
+            next["sequence"] = 3;
+            next["clock"] = 13;
+            check(!intake.TryAccept(Frame(next.ToJsonString()), 1099, out _) &&
+                intake.Faulted && intake.LastAccepted is null, "delayed receipt cannot rewind caller clock");
+        });
+        test("target vitals v2 equal timestamps allowed but negative time invalidates", () =>
+        {
+            var intake = new TargetVitalsV2Intake();
+            check(intake.TryAccept(Frame(Good), 1000, out _) &&
+                intake.TryGetFresh(1000, 0, out var fresh) && fresh is not null,
+                "same-tick fresh query accepted");
+            check(!intake.TryGetFresh(-1, 500, out _) &&
+                intake.Faulted && intake.LastAccepted is null, "negative clock latches");
+        });
+        test("target vitals v2 invalid age bounds cannot bypass the clock watermark", () =>
+        {
+            var intake = new TargetVitalsV2Intake();
+            check(intake.TryAccept(Frame(Good), 1000, out _), "first");
+            check(!intake.TryGetFresh(1200, -1, out _) &&
+                !intake.TryGetFresh(1201, 5001, out _), "invalid freshness windows");
+            check(intake.TryGetFresh(1201, 500, out _), "invalid age does not corrupt advancing query");
+            check(!intake.TryGetFresh(1199, 500, out _) && intake.Faulted,
+                "failed query still updates clock watermark");
+        });
+        test("target vitals v2 empty query fences later older receipt", () =>
+        {
+            var intake = new TargetVitalsV2Intake();
+            check(!intake.TryGetFresh(2000, 500, out _), "empty is not fresh");
+            check(!intake.TryAccept(Frame(Good), 1999, out _) &&
+                intake.Faulted && intake.LastAccepted is null,
+                "previous empty query still prevents time rollback");
+        });
+        test("target vitals v2 new frame may equal last freshness query timestamp", () =>
+        {
+            var intake = new TargetVitalsV2Intake();
+            check(intake.TryAccept(Frame(Good), 1000, out _) &&
+                intake.TryGetFresh(1100, 500, out _), "prior query");
+            var next = System.Text.Json.Nodes.JsonNode.Parse(Good)!.AsObject();
+            next["sequence"] = 3;
+            next["clock"] = 13;
+            check(intake.TryAccept(Frame(next.ToJsonString()), 1100, out var accepted) &&
+                accepted?.Sequence == 3 && intake.TryGetFresh(1100, 0, out _),
+                "same caller clock tick across query and advancing new receipt");
+        });
         test("target vitals v2 rejects ASCII DEL and embedded control characters", () =>
         {
             check(Rejects(Good.Replace("targetId", "tar\\u007FgetId")) &&
@@ -180,10 +243,59 @@ internal static class TargetVitalsV2Specs
             var scan = new LiveScanResult(true, "complete", 100, 100, 1, TimeSpan.Zero,
                 Array.Empty<ReadOnlyMemory<byte>>(), 0, 0, null)
             { TargetVitalsCandidates = new ReadOnlyMemory<byte>[] { frame } };
-            check(TargetVitalsCandidateReporting.Build(scan, nonce, true).Status == "candidate-unqualified", "current");
-            check(TargetVitalsCandidateReporting.Build(scan, nonce, false).Health is null, "identity");
+            var reported = TargetVitalsCandidateReporting.Build(scan, nonce, true);
+            check(reported.Status == "candidate-unqualified" && reported.Sequence == 2 &&
+                reported.Epoch == 1 && reported.PlayerId == "p" && reported.TargetId == "t" &&
+                reported.ProducerClock == 12.5 && reported.Health == 40 && reported.HealthMax == 100 &&
+                reported.FrameSha256?.Length == 64 && reported.EnvelopeSha256?.Length == 64,
+                "full candidate provenance retained without qualification");
+            var wire = System.Text.Json.JsonSerializer.Serialize(reported,
+                Rift.Automation.Guest.Infrastructure.JsonFormat.Options);
+            using var decodedWire = System.Text.Json.JsonDocument.Parse(wire);
+            check(decodedWire.RootElement.GetProperty("playerId").GetString() == "p" &&
+                decodedWire.RootElement.GetProperty("producerClock").GetDouble() == 12.5,
+                "published wire uses independent producer fields");
+            var unavailable = TargetVitalsCandidateReporting.Build(scan, nonce, false);
+            check(unavailable.Health is null && unavailable.PlayerId is null &&
+                unavailable.ProducerClock is null && unavailable.EnvelopeSha256 is null,
+                "source-identity failure redacts entire candidate");
             check(TargetVitalsCandidateReporting.Build(scan with { Completed = false }, nonce, true).Health is null, "incomplete");
             check(TargetVitalsCandidateReporting.Build(scan with { TargetVitalsCandidates = [] }, nonce, true).Status == "not-found", "empty");
+        });
+        test("target vitals v2 serialized guest report reaches physical host as unqualified tuple", () =>
+        {
+            const string nonce = "0123456789abcdef0123456789abcdef";
+            var id = Guid.NewGuid();
+            var token = new string('b', 40);
+            var binding = new Rift.Automation.Windows.PhysicalTelemetryBinding(
+                id, nonce, 1234, 638000000000000000,
+                @"C:\RIFT\rift_x64.exe", new string('c', 64));
+            var envelope = Encoding.ASCII.GetBytes("RR2L1|" + nonce + "|AFT2|" + Good +
+                "|ENDAFT2|ENDRR2L1");
+            var scan = new LiveScanResult(true, "complete", 100, 100, 1, TimeSpan.Zero,
+                Array.Empty<ReadOnlyMemory<byte>>(), 0, 0, null)
+            { TargetVitalsCandidates = new ReadOnlyMemory<byte>[] { envelope } };
+            var candidate = TargetVitalsCandidateReporting.Build(scan, nonce, true);
+            var scanReport = new LiveScanReport("complete", true, 100, 100, 1, 0, 0, 0, 0, 0, null);
+            var rr2 = new LiveRiftReader2Report(
+                1, "unbound", "unavailable", null, 0, 0, null, null,
+                5000, null, "not-found", null, null, null, null, null, scanReport);
+            var when = new DateTimeOffset(2026, 11, 16, 20, 0, 0, TimeSpan.Zero);
+            var snapshot = new LiveReaderSnapshot(
+                1, id, nonce, 1, when.ToString("O"), 100, "running", null,
+                new LiveTargetReport(binding.GameProcessId, binding.GameProcessStartUtcTicks,
+                    binding.GameExecutablePath, binding.GameExecutableSha256, nonce),
+                rr2, new LiveDeliveryReport(true, "ready", null, null, null))
+            { TargetVitalsCandidate = candidate };
+            var wire = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(snapshot, JsonFormat.Options);
+            var host = new Rift.Automation.Windows.PhysicalTelemetryIngest(binding, token);
+            check(host.Accept(wire, token, "127.0.0.1", when), "guest serializer delivered");
+            var received = host.Latest?.TargetVitals;
+            check(received is { PlayerId: "p", TargetId: "t", Epoch: 1, Sequence: 2,
+                ProducerClock: 12.5, Health: 40, HealthMax: 100, SourceQualified: false } &&
+                received.FrameSha256 == candidate.FrameSha256 &&
+                received.EnvelopeSha256 == candidate.EnvelopeSha256,
+                "physical host retains exact producer data without qualification");
         });
         test("target vitals v2 preserves legacy RR2A1 isolation", () =>
         {

@@ -9,9 +9,22 @@ public sealed record PhysicalTelemetryBinding(
     Guid ReaderInstanceId, string ReaderNonce, int GameProcessId,
     long GameProcessStartUtcTicks, string GameExecutablePath, string GameExecutableSha256);
 
+/// <summary>Identity-bound, unqualified memory candidate. Not a combat observation.</summary>
+public sealed record PhysicalTargetVitalsCandidate(
+    string PlayerId, string TargetId, long Epoch, long Sequence,
+    double ProducerClock, double Health, double HealthMax,
+    string EnvelopeSha256, string FrameSha256)
+{
+    public bool SourceQualified => false;
+}
+
 public sealed record PhysicalTelemetryReceipt(
     long Sequence, string ReaderStatus, DateTimeOffset ReceivedAtUtc,
-    string? TargetVitalsStatus, long? TargetVitalsSequence);
+    string? TargetVitalsStatus, long? TargetVitalsSequence)
+{
+    // This remains diagnostic only: receipt UTC does not validate producer time.
+    public PhysicalTargetVitalsCandidate? TargetVitals { get; init; }
+}
 
 public sealed class PhysicalTelemetryIngest
 {
@@ -94,10 +107,19 @@ public sealed class PhysicalTelemetryIngest
 
             string? vitalsStatus = null;
             long? vitalsSequence = null;
+            PhysicalTargetVitalsCandidate? parsedVitals = null;
             if (root.TryGetProperty("targetVitalsCandidate", out var vitals) &&
                 vitals.ValueKind == JsonValueKind.Object)
             {
-                if (!Unique(vitals)) return false;
+                if (!Unique(vitals) || vitals.EnumerateObject().Any(p =>
+                    p.Name is not ("status" or "candidateCount" or "sequence" or
+                        "targetId" or "health" or "healthMax" or "playerId" or
+                        "epoch" or "producerClock" or "envelopeSha256" or "frameSha256")))
+                    return false;
+                if (vitals.TryGetProperty("candidateCount", out var count) &&
+                    (count.ValueKind != JsonValueKind.Number || !count.TryGetInt32(out var n) ||
+                        n < 0 || n > 4096))
+                    return false;
                 vitalsStatus = vitals.GetProperty("status").GetString();
                 if (vitalsStatus is not ("unavailable" or "not-found" or "conflict" or "candidate-unqualified"))
                     return false;
@@ -106,15 +128,24 @@ public sealed class PhysicalTelemetryIngest
                     if (seq.ValueKind == JsonValueKind.Number)
                     {
                         vitalsSequence = seq.GetInt64();
-                        if (vitalsSequence < 1 || vitalsStatus != "candidate-unqualified") return false;
+                        if (vitalsSequence is < 1 or > 9007199254740991 ||
+                            vitalsStatus != "candidate-unqualified") return false;
                     }
                     else if (seq.ValueKind != JsonValueKind.Null) return false;
                 }
-                // Never promote candidate data without the independently pinned game identity.
+                if (vitalsStatus == "candidate-unqualified")
+                {
+                    if (vitalsSequence is not long candidateSequence) return false;
+                    if (vitals.TryGetProperty("candidateCount", out var candidateCount) &&
+                        (candidateCount.GetInt32() is < 1 or > 256)) return false;
+                    parsedVitals = ParseTargetVitalsCandidate(vitals, candidateSequence);
+                }
+                // No health candidate survives missing identity or a stopped reader.
                 if (target.ValueKind == JsonValueKind.Null || status != "running")
                 {
                     vitalsStatus = null;
                     vitalsSequence = null;
+                    parsedVitals = null;
                 }
             }
             lock (gate)
@@ -122,7 +153,10 @@ public sealed class PhysicalTelemetryIngest
                 if (terminated || sequence <= lastSequence) return false;
                 lastSequence = sequence;
                 if (status == "terminated") terminated = true;
-                latest = new(sequence, status!, receivedAtUtc.ToUniversalTime(), vitalsStatus, vitalsSequence);
+                latest = new(sequence, status!, receivedAtUtc.ToUniversalTime(), vitalsStatus, vitalsSequence)
+                {
+                    TargetVitals = parsedVitals
+                };
             }
             return true;
         }
@@ -132,6 +166,40 @@ public sealed class PhysicalTelemetryIngest
             return false;
         }
     }
+
+    private static PhysicalTargetVitalsCandidate? ParseTargetVitalsCandidate(
+        JsonElement candidate, long sequence)
+    {
+        // Older diagnostic senders reported only status + sequence. Preserve
+        // compatibility, but never synthesize absent health/provenance values.
+        string[] fields = ["playerId", "targetId", "epoch", "producerClock",
+            "health", "healthMax", "envelopeSha256", "frameSha256"];
+        if (fields.All(name => !candidate.TryGetProperty(name, out _))) return null;
+        if (fields.Any(name => !candidate.TryGetProperty(name, out _)))
+            throw new FormatException("Partial candidate provenance.");
+        var playerId = candidate.GetProperty("playerId").GetString();
+        var targetId = candidate.GetProperty("targetId").GetString();
+        var epoch = candidate.GetProperty("epoch").GetInt64();
+        var clock = candidate.GetProperty("producerClock").GetDouble();
+        var health = candidate.GetProperty("health").GetDouble();
+        var max = candidate.GetProperty("healthMax").GetDouble();
+        var envelopeHash = candidate.GetProperty("envelopeSha256").GetString();
+        var frameHash = candidate.GetProperty("frameSha256").GetString();
+        if (!ValidId(playerId) || !ValidId(targetId) || epoch is < 1 or > 9007199254740991 ||
+            !double.IsFinite(clock) || clock < 0 || !double.IsFinite(health) ||
+            !double.IsFinite(max) || max <= 0 || health < 0 || health > max ||
+            !ValidHash(envelopeHash) || !ValidHash(frameHash))
+            throw new FormatException("Invalid candidate provenance.");
+        return new(playerId!, targetId!, epoch, sequence, clock, health, max,
+            envelopeHash!, frameHash!);
+    }
+
+    private static bool ValidId(string? id) =>
+        !string.IsNullOrWhiteSpace(id) && id.Length <= 128 &&
+        id.All(c => c is >= ' ' and <= '~');
+
+    private static bool ValidHash(string? value) =>
+        value is { Length: 64 } && value.All(Uri.IsHexDigit);
 
     private static bool Unique(JsonElement obj)
     {
