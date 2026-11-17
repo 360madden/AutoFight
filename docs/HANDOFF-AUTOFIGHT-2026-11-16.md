@@ -1,5 +1,14 @@
 # AutoFight — Continuation Handoff (2026-11-16 04:33 EST)
 
+## Newest offline checkpoint — 2026-11-16 21:30 EST
+
+- **Machine:** independently verified Workbridge `AMD-DESKTOP` v0.16.5-dev, `C:\work\AutoFight`, clean `main...origin/main` before the new changes; previous pushed HEAD `724ffd1`.
+- **AFT2 now survives end-to-end diagnostics:** `TargetVitalsCandidateReporting` retains AFT2 PlayerId, TargetId, HP/max, Epoch, Sequence, raw producer clock and envelope/frame hashes; `PhysicalTelemetryIngest` parses a bounded typed candidate only from a pinned, authenticated running reader/game receipt. Full Guest JSON serialization to actual physical host is covered by an offline test. `PhysicalTargetVitalsCandidate.SourceQualified` is always **false** and no candidate is wired into live combat or input.
+- **Clock safety:** `TargetVitalsV2Intake` tracks a shared monotonic invocation-time watermark on accept + freshness checks. Regressed/negative timestamps latch a fault and clear cached health until explicit Reset. Independent `/root/vitals_clock_review` found no blocker; after review, three more isolated query-time tests were added.
+- **Verification:** Release .NET 10 solution build 0 warnings/errors; 182 Core + 234 Windows + 46 Guest = **462/462 synthetic specs**, WPF smoke **7/7**, `git diff --check` exit 0. Independent elevated `/root/vitals_provenance_review` **PASS**, no blocking P0/P1; validated exact five source/test hashes and the new Guest serialization → host test. Caveats: older partial-provenance Guest candidate payloads fail closed (only status/sequence-only legacy diagnostics remain compatible); malformed authenticated follow-ups can leave a prior *unqualified* last-valid receipt until its ordinary age expiry. No producer freshness established.
+- **Not proved:** live/current addon load and reader bind, passive producer progress/target changes, physical target-health observations, observed attack damage or autonomous combat. All game input, reloads, screen focus and VM actions remained untouched.
+- **Next:** close independent review and correct any findings; commit scoped code/docs and inspect remote before optional push. Later, qualify current-build source/producer freshness with a separately approved or Joey-operated read-only experiment. Do not infer health freshness from advancing outer transport sequence or create `CombatObservation` with unknown hostility/range/readiness values.
+
 ## Newer offline checkpoint — 2026-11-16 20:50 EST
 
 - **Machine independently verified:** Workbridge `computerName=AMD-DESKTOP`, root `C:\work`, connector v0.16.5-dev. Authoritative repository remains `C:\work\AutoFight`, no sister-repo changes.
