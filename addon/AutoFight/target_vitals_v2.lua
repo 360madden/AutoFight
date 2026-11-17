@@ -1,4 +1,4 @@
--- AutoFight-owned target vitals candidate producer (AFT2). Not loaded by RiftAddon.toc.
+-- AutoFight-owned AFT2 target-vitals candidate producer; loaded by RiftAddon.toc.
 -- Read-only and fail-closed; integration requires review and live source qualification.
 local _, privateVars = ...
 local V2 = {}

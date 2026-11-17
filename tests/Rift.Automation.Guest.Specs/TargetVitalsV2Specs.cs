@@ -184,6 +184,109 @@ internal static class TargetVitalsV2Specs
             catch (InvalidDataException) { rejected = true; }
             check(rejected, "legacy payload not target vitals");
         });
+        test("target vitals v2 scanner retains AFT2-only fast-scan region", () =>
+        {
+            const string nonce = "0123456789abcdef0123456789abcdef";
+            var frame = Encoding.ASCII.GetBytes("RR2L1|" + nonce + "|AFT2|" + Good +
+                "|ENDAFT2|ENDRR2L1");
+            var addon = new EnvelopeCandidateAccumulator(nonce);
+            var vitals = new TargetVitalsV2CandidateAccumulator(nonce);
+            var region = new LiveCandidateRegion((nint)0x1000, 4096, (nint)0x1000, 0, 0, 0, 0);
+            var scoped = new HashSet<LiveCandidateRegion>();
+            WindowsMemoryScanner.FeedAndTrackCandidateRegions(frame, addon, vitals,
+                region, Array.Empty<LiveCandidateRegion>(), scoped);
+            check(addon.ValidCandidates.Count == 0 && vitals.Candidates.Count == 1 &&
+                scoped.SetEquals([region]), "AFT2-only memory discovered and scoped");
+            var selection = TargetVitalsCandidateReporting.Build(new LiveScanResult(
+                true, "complete", 4096, 4096, 1, TimeSpan.Zero, [], 0, 0, null)
+                { TargetVitalsCandidates = vitals.Candidates }, nonce, true);
+            check(selection.Status == "candidate-unqualified" && selection.Health == 40,
+                "retained AFT2 can reach existing diagnostic selector");
+        });
+        test("target vitals v2 scanner retains both sides of contiguous AFT2 split", () =>
+        {
+            const string nonce = "0123456789abcdef0123456789abcdef";
+            var frame = Encoding.ASCII.GetBytes("RR2L1|" + nonce + "|AFT2|" + Good +
+                "|ENDAFT2|ENDRR2L1");
+            var addon = new EnvelopeCandidateAccumulator(nonce);
+            var vitals = new TargetVitalsV2CandidateAccumulator(nonce);
+            var a = new LiveCandidateRegion((nint)0x1000, 4096, (nint)0x1000, 0, 0, 0, 0);
+            var b = new LiveCandidateRegion((nint)0x2000, 4096, (nint)0x2000, 0, 0, 0, 0);
+            var scoped = new HashSet<LiveCandidateRegion>();
+            var split = frame.Length / 2;
+            WindowsMemoryScanner.FeedAndTrackCandidateRegions(frame.AsSpan(0, split), addon, vitals,
+                a, [], scoped);
+            check(scoped.Count == 0, "incomplete first half cannot create scope");
+            WindowsMemoryScanner.FeedAndTrackCandidateRegions(frame.AsSpan(split), addon, vitals,
+                b, [a], scoped);
+            check(vitals.Candidates.Count == 1 && scoped.SetEquals([a, b]),
+                "completing AFT2 selects both adjacent regions");
+            var isolatedAddon = new EnvelopeCandidateAccumulator(nonce);
+            var isolatedVitals = new TargetVitalsV2CandidateAccumulator(nonce);
+            var isolatedScope = new HashSet<LiveCandidateRegion>();
+            WindowsMemoryScanner.FeedAndTrackCandidateRegions(frame.AsSpan(0, split),
+                isolatedAddon, isolatedVitals, a, [], isolatedScope);
+            isolatedAddon.ResetMemoryBoundary();
+            isolatedVitals.ResetMemoryBoundary();
+            WindowsMemoryScanner.FeedAndTrackCandidateRegions(frame.AsSpan(split),
+                isolatedAddon, isolatedVitals, b, [], isolatedScope);
+            check(isolatedVitals.Candidates.Count == 0 && isolatedScope.Count == 0,
+                "noncontiguous memory never gets a synthesized envelope");
+        });
+        test("target vitals v2 scanner ignores malformed or wrong-nonce region", () =>
+        {
+            const string nonce = "0123456789abcdef0123456789abcdef";
+            var addon = new EnvelopeCandidateAccumulator(nonce);
+            var vitals = new TargetVitalsV2CandidateAccumulator(nonce);
+            var region = new LiveCandidateRegion((nint)0x1000, 4096, (nint)0x1000, 0, 0, 0, 0);
+            var scoped = new HashSet<LiveCandidateRegion>();
+            var wrong = Encoding.ASCII.GetBytes("RR2L1|fedcba9876543210fedcba9876543210|AFT2|" +
+                Good + "|ENDAFT2|ENDRR2L1");
+            WindowsMemoryScanner.FeedAndTrackCandidateRegions(wrong, addon, vitals,
+                region, [], scoped);
+            var malformed = Encoding.ASCII.GetBytes("RR2L1|" + nonce +
+                "|AFT2|bad|ENDAFT2|ENDRR2L1");
+            WindowsMemoryScanner.FeedAndTrackCandidateRegions(malformed, addon, vitals,
+                region, [], scoped);
+            check(vitals.Candidates.Count == 0 && addon.ValidCandidates.Count == 0 &&
+                scoped.Count == 0, "unbound and malformed bytes cannot expand scope");
+        });
+        test("target vitals v2 scanner combines legacy and AFT2 region discoveries", () =>
+        {
+            const string nonce = "0123456789abcdef0123456789abcdef";
+            var old = new {
+                schemaVersion = 1, addonVersion = "0.1.0", sequence = 1, epoch = 1,
+                clock = new { status = "ok", value = 10.0 },
+                player = new { status = "ok", value = "p" },
+                fields = new {
+                    coordX = new { status = "ok", value = 1.0 },
+                    coordY = new { status = "ok", value = 0.0 },
+                    coordZ = new { status = "ok", value = 2.0 },
+                    health = new { status = "ok", value = 4.0 },
+                    healthMax = new { status = "ok", value = 5.0 },
+                    combat = new { status = "ok", value = false }
+                }
+            };
+            var legacyFrame = Encoding.ASCII.GetBytes("RR2L1|" + nonce + "|RR2A1|" +
+                System.Text.Json.JsonSerializer.Serialize(old) + "|ENDRR2A1|ENDRR2L1");
+            var targetFrame = Encoding.ASCII.GetBytes("RR2L1|" + nonce + "|AFT2|" + Good +
+                "|ENDAFT2|ENDRR2L1");
+            var addon = new EnvelopeCandidateAccumulator(nonce);
+            var vitals = new TargetVitalsV2CandidateAccumulator(nonce);
+            var regionA = new LiveCandidateRegion((nint)0x1000, 4096, (nint)0x1000, 0, 0, 0, 0);
+            var regionB = new LiveCandidateRegion((nint)0x3000, 4096, (nint)0x3000, 0, 0, 0, 0);
+            var scoped = new HashSet<LiveCandidateRegion>();
+            WindowsMemoryScanner.FeedAndTrackCandidateRegions(legacyFrame, addon, vitals,
+                regionA, [], scoped);
+            addon.ResetMemoryBoundary();
+            vitals.ResetMemoryBoundary();
+            WindowsMemoryScanner.FeedAndTrackCandidateRegions(targetFrame, addon, vitals,
+                regionB, [], scoped);
+            WindowsMemoryScanner.FeedAndTrackCandidateRegions(targetFrame, addon, vitals,
+                regionB, [], scoped);
+            check(addon.ValidCandidates.Count == 1 && vitals.Candidates.Count >= 1 &&
+                scoped.SetEquals([regionA, regionB]), "both formats share bounded deduplicated scope");
+        });
         test("target vitals v2 scanner discovers envelope across chunks", () =>
         {
             const string nonce = "0123456789abcdef0123456789abcdef";
@@ -223,6 +326,78 @@ internal static class TargetVitalsV2Specs
             conflict["health"] = 30;
             var frames = new ReadOnlyMemory<byte>[] { Wrap(Good), Wrap(conflict.ToJsonString()) };
             check(TargetVitalsV2CandidateSelector.Select(frames, nonce, true) is null, "conflict");
+        });
+        test("target vitals v2 selector rejects mixed epochs in either memory order", () =>
+        {
+            const string nonce = "0123456789abcdef0123456789abcdef";
+            byte[] Wrap(string json) => Encoding.ASCII.GetBytes("RR2L1|" + nonce + "|AFT2|" +
+                json + "|ENDAFT2|ENDRR2L1");
+            var old = System.Text.Json.Nodes.JsonNode.Parse(Good)!.AsObject();
+            old["sequence"] = 100;
+            old["clock"] = 100;
+            var replacement = System.Text.Json.Nodes.JsonNode.Parse(Good)!.AsObject();
+            replacement["epoch"] = 2;
+            replacement["sequence"] = 1;
+            replacement["clock"] = 1;
+            var a = Wrap(old.ToJsonString());
+            var b = Wrap(replacement.ToJsonString());
+            check(TargetVitalsV2CandidateSelector.Select([a, b], nonce, true) is null &&
+                TargetVitalsV2CandidateSelector.Select([b, a], nonce, true) is null,
+                "stale high sequence cannot win across producer epochs");
+        });
+        test("target vitals v2 selector rejects mixed player and target identities", () =>
+        {
+            const string nonce = "0123456789abcdef0123456789abcdef";
+            byte[] Wrap(string json) => Encoding.ASCII.GetBytes("RR2L1|" + nonce + "|AFT2|" +
+                json + "|ENDAFT2|ENDRR2L1");
+            var next = System.Text.Json.Nodes.JsonNode.Parse(Good)!.AsObject();
+            next["sequence"] = 3;
+            next["clock"] = 13;
+            var changedPlayer = next.DeepClone().AsObject();
+            changedPlayer["playerId"] = "different-player";
+            var changedTarget = next.DeepClone().AsObject();
+            changedTarget["targetId"] = "different-target";
+            check(TargetVitalsV2CandidateSelector.Select(
+                [Wrap(Good), Wrap(changedPlayer.ToJsonString())], nonce, true) is null,
+                "mixed players");
+            check(TargetVitalsV2CandidateSelector.Select(
+                [Wrap(Good), Wrap(changedTarget.ToJsonString())], nonce, true) is null,
+                "mixed target generations");
+        });
+        test("target vitals v2 selector rejects producer clock inversion by sequence", () =>
+        {
+            const string nonce = "0123456789abcdef0123456789abcdef";
+            byte[] Wrap(string json) => Encoding.ASCII.GetBytes("RR2L1|" + nonce + "|AFT2|" +
+                json + "|ENDAFT2|ENDRR2L1");
+            var wrong = System.Text.Json.Nodes.JsonNode.Parse(Good)!.AsObject();
+            wrong["sequence"] = 3;
+            wrong["clock"] = 12;
+            var later = Wrap(wrong.ToJsonString());
+            var first = Wrap(Good);
+            check(TargetVitalsV2CandidateSelector.Select([first, later], nonce, true) is null &&
+                TargetVitalsV2CandidateSelector.Select([later, first], nonce, true) is null,
+                "higher sequence with older producer time");
+        });
+        test("target vitals v2 selector accepts reordered consistent copies but caps candidates", () =>
+        {
+            const string nonce = "0123456789abcdef0123456789abcdef";
+            byte[] Wrap(string json) => Encoding.ASCII.GetBytes("RR2L1|" + nonce + "|AFT2|" +
+                json + "|ENDAFT2|ENDRR2L1");
+            var next = System.Text.Json.Nodes.JsonNode.Parse(Good)!.AsObject();
+            next["sequence"] = 3;
+            next["clock"] = 13;
+            next["health"] = 30;
+            var old = Wrap(Good);
+            var fresh = Wrap(next.ToJsonString());
+            var selected = TargetVitalsV2CandidateSelector.Select([fresh, old, old], nonce, true);
+            check(selected?.Observation.Sequence == 3 && selected.Observation.Health == 30,
+                "memory enumeration order and identical older duplicates");
+            var atCap = Enumerable.Repeat<ReadOnlyMemory<byte>>(old, 256).ToArray();
+            check(TargetVitalsV2CandidateSelector.Select(atCap, nonce, true)?.Observation.Sequence == 2,
+                "exact candidate limit remains valid");
+            var excessive = Enumerable.Repeat<ReadOnlyMemory<byte>>(old, 257).ToArray();
+            check(TargetVitalsV2CandidateSelector.Select(excessive, nonce, true) is null,
+                "candidate cap prevents unbounded standalone selection");
         });
         test("target vitals v2 malformed candidate fails closed without throwing", () =>
         {

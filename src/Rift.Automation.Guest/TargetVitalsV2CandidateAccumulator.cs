@@ -3,7 +3,7 @@ using Rift.Automation.Guest.Infrastructure;
 
 namespace Rift.Automation.Guest.Live;
 
-/// <summary>Bounded AFT2 memory candidate discovery; read-only and not wired to a live scanner yet.</summary>
+/// <summary>Bounded AFT2 memory candidate discovery used by the read-only Windows memory scanner; not a qualified source.</summary>
 public sealed class TargetVitalsV2CandidateAccumulator
 {
     private const int RetainedTailBytes = TargetVitalsV2EnvelopeDecoder.MaxEnvelopeBytes - 1;

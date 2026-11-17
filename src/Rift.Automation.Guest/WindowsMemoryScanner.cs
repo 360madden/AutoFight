@@ -1,7 +1,10 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using Rift.Automation.Guest.Infrastructure;
+
+[assembly: InternalsVisibleTo("Rift.Automation.Guest.Specs")]
 
 namespace Rift.Automation.Guest.Live;
 
@@ -286,15 +289,8 @@ public static class WindowsMemoryScanner
                     return new(Incomplete("read-failed", plannedBytes, scannedBytes, regions.Count, stopwatch.Elapsed,
                         $"ReadProcessMemory failed at 0x{address.ToInt64():X}: {detail}", accumulator), error);
                 }
-                var candidateCountBefore = accumulator.ValidCandidates.Count;
-                accumulator.Feed(buffer.AsSpan(0, count));
-                targetVitals.Feed(buffer.AsSpan(0, count));
-                if (accumulator.ValidCandidates.Count > candidateCountBefore)
-                {
-                    candidateRegions.Add(region);
-                    foreach (var tailRegion in contiguousTailRegions)
-                        candidateRegions.Add(tailRegion);
-                }
+                FeedAndTrackCandidateRegions(buffer.AsSpan(0, count), accumulator, targetVitals,
+                    region, contiguousTailRegions, candidateRegions);
                 if (accumulator.BudgetExceeded || targetVitals.BudgetExceeded)
                     return new(Incomplete("candidate-budget-exceeded", plannedBytes, scannedBytes + count, regions.Count,
                         stopwatch.Elapsed, "Envelope endpoint or valid-candidate budget was exceeded.", accumulator), null);
@@ -330,6 +326,26 @@ public static class WindowsMemoryScanner
             CandidateRegions = candidateRegions.OrderBy(region => region.BaseAddress.ToInt64()).ToArray(),
             TargetVitalsCandidates = targetVitals.Candidates
         }, null);
+    }
+
+    /// <summary>Pure bounded candidate-region bookkeeping shared by live scans and synthetic tests.</summary>
+    internal static void FeedAndTrackCandidateRegions(
+        ReadOnlySpan<byte> bytes,
+        EnvelopeCandidateAccumulator addon,
+        TargetVitalsV2CandidateAccumulator vitals,
+        LiveCandidateRegion currentRegion,
+        IReadOnlyList<LiveCandidateRegion> contiguousTailRegions,
+        ISet<LiveCandidateRegion> candidateRegions)
+    {
+        var beforeAddon = addon.ValidCandidates.Count;
+        var beforeVitals = vitals.Candidates.Count;
+        addon.Feed(bytes);
+        vitals.Feed(bytes);
+        if (addon.ValidCandidates.Count == beforeAddon && vitals.Candidates.Count == beforeVitals)
+            return;
+        candidateRegions.Add(currentRegion);
+        foreach (var tailRegion in contiguousTailRegions)
+            candidateRegions.Add(tailRegion);
     }
 
     internal static ChunkReadResult ReadChunkWithStableRegionRetry(
