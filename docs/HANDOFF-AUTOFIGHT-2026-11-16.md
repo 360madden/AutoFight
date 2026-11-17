@@ -1,5 +1,15 @@
 # AutoFight — Continuation Handoff (2026-11-16 04:33 EST)
 
+## Newer offline checkpoint — 2026-11-16 20:50 EST
+
+- **Machine independently verified:** Workbridge `computerName=AMD-DESKTOP`, root `C:\work`, connector v0.16.5-dev. Authoritative repository remains `C:\work\AutoFight`, no sister-repo changes.
+- **Local Git:** `main` at `77d10e7` after reviewed commits `9eca9fb` (Storage Guardian hardening), `ac869d7` (integration docs), `649e01e` (monotonic combat preview clock), and `77d10e7` (target continuity). Clean at this checkpoint; remote state/push must be verified separately.
+- **Storage Guardian:** independently reviewed and integrated into local main; nested Git worktrees/submodules and UTF-8 tracked names protected, **54/54** PowerShell 5.1 fixture tests, real read-only audit **930.33 MiB Normal**, **526.24 MiB** old generated-output Preview candidates. No real cleanup, automatic scheduling or generated-output deletion. See `docs/STORAGE-GUARDIAN.md`.
+- **Combat offline correctness:** planner time-rollback and target-loss/death/swap discontinuity corrections accepted by independent reviewer `/root/combat_audit`. Missing unrelated fields cannot mask the target identity latches. Latest .NET 10 Release build **0 warnings/errors**; **182 Core + 232 Windows + 39 Guest = 453/453 tests**, WPF synthetic smoke **7/7**. Both changes remain **preview-only** (`CanExecute=false`), with no active combat controller or qualified live target data.
+- **Live evidence still absent:** no 30-second manual physical A→B trace/M6 replay, qualified current-build live target health/identity/ability readings, live attack/damage attribution, real movement or automated combat. No RIFT/VM input, focus, reload, process memory scan or lifecycle changes occurred during this offline checkpoint.
+- **Next meaningful offline work:** audit the already-present AutoFight-owned target-vitals v2 addon/GuestReader/host provenance and find the smallest concrete missing adapter into typed combat observations; choose a testable integration, not another speculative FSM abstraction. Record exact source freshness/identity gates. Live validation requires a separately identified Joey-operated or user-authorized session. Continue small tests, independent review, scoped commits.
+- **Scope:** no runtime RR2/RRE/RiftWorld/Workbridge/AI dependencies; those repositories remain references only. Preserve private capture data and Git history.
+
 ## Repository and verification
 - Target: AMD-DESKTOP Workbridge, `C:\work\AutoFight`. Verify machine identity independently before executing future changes; connector label alone is not hardware proof.
 - Git: `main`, clean worktree at this read, `ahead 21` relative to `origin/main`. Exact HEAD hash was not retrieved; obtain it before changes. No push performed in this handoff.
