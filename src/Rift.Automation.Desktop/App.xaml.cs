@@ -15,7 +15,7 @@ public partial class App : Application
         if (e.Args is ["--help"])
         {
             Console.WriteLine("AutoFight 0.5.7 - standalone VMware diagnostics and supervised legacy tools");
-            Console.WriteLine("Usage: Rift.Automation.Desktop [--owned-telemetry <private-config.local.json> <seconds> | --owned-qualify-telemetry <private-config.local.json> | --vm-feedback <source-pin> | --vm-watch <source-pin> <seconds> | --vm-qualify-feedback <lab> <source-pin> | --vm-status <config> | --vm-preflight <lab> <source-pin> <config> | --vm-pulse <lab> <source-pin> <config> <lease> <arm> <key> <hold-ms> | --clients | --physical-xyz <pid> <start-utc-ticks> | --physical-xyz-watch <pid> <start-utc-ticks> <seconds> | --physical-xyz-trace-capture <pid> <start-utc-ticks> <seconds> <new-output.json> | --physical-xyz-trace-assess <saved-json-file> | --inspect-unit <file> | --replay <file> | --smoke-test | --help]");
+            Console.WriteLine("Usage: Rift.Automation.Desktop [--owned-telemetry <private-config.local.json> <seconds> | --owned-qualify-telemetry <private-config.local.json> | --vm-feedback <source-pin> | --vm-watch <source-pin> <seconds> | --vm-qualify-feedback <lab> <source-pin> | --vm-status <config> | --vm-preflight <lab> <source-pin> <config> | --vm-pulse <lab> <source-pin> <config> <lease> <arm> <key> <hold-ms> | --clients | --physical-build-check <absolute-rift_x64.exe> | --physical-xyz <pid> <start-utc-ticks> | --physical-xyz-watch <pid> <start-utc-ticks> <seconds> | --physical-xyz-trace-capture <pid> <start-utc-ticks> <seconds> <new-output.json> | --physical-xyz-trace-assess <saved-json-file> | --inspect-unit <file> | --replay <file> | --smoke-test | --help]");
             Console.WriteLine("VM controls use an existing supervised controller on localhost; no automatic arming.");
             Console.WriteLine("--vm-preflight checks current selected-lab identity/readiness; no input or authorization artifacts.");
             Console.WriteLine("--vm-qualify-feedback checks 480s pinned telemetry with every progress gap strictly below 4500ms; no input or controller contact.");
@@ -23,6 +23,7 @@ public partial class App : Application
             Console.WriteLine("--owned-qualify-telemetry waits up to 30s for fresh owned XYZ, then measures a strict 480s window; no input.");
             Console.WriteLine("VM feedback reads legacy RR2 latest.json through a pinned reader identity, without touching input.");
             Console.WriteLine("--clients lists local RIFT process metadata as JSON without opening a window.");
+            Console.WriteLine("--physical-build-check hashes only an explicitly supplied on-disk rift_x64.exe; no process access or native-offset promotion.");
             Console.WriteLine("--physical-xyz takes an exact PID and process-creation UTC ticks from --clients; read-only current-build native XYZ candidate, not sustained qualification.");
             Console.WriteLine("--physical-xyz-watch repeats pinned read-only acquisitions approximately every second for 2-30s; repeating equal XYZ does not prove passive freshness.");
             Console.WriteLine("--physical-xyz-trace-capture explicitly records 10..120s of read-only native XYZ into a NEW no-overwrite historical JSON file; user moves manually, never the program.");
@@ -50,6 +51,12 @@ public partial class App : Application
             ClientInventorySnapshot clients = RiftClientInventory.Scan();
             Console.WriteLine(JsonSerializer.Serialize(clients));
             Shutdown(clients.ErrorCode is null ? 0 : 2);
+            return;
+        }
+
+        if (e.Args is ["--physical-build-check", string executablePath])
+        {
+            Shutdown(await RunPhysicalBuildCheckAsync(executablePath));
             return;
         }
 
@@ -193,6 +200,36 @@ public partial class App : Application
         if (e.Args is ["--replay", _]) window.ShowReplay();
         ShutdownMode = ShutdownMode.OnMainWindowClose;
         window.Show();
+    }
+
+    /// <summary>Disk-only compatibility preflight; a hash match never qualifies native offsets.</summary>
+    private static async Task<int> RunPhysicalBuildCheckAsync(string executablePath)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        PhysicalRiftBuildCheckReport report;
+        try
+        {
+            report = await PhysicalRiftBuildPreflight.CheckAsync(executablePath, timeout.Token);
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            report = new(PhysicalRiftBuildCheckState.Unavailable,
+                PhysicalRiftPositionReader.GameSha256, null, null, null);
+        }
+        Console.WriteLine(JsonSerializer.Serialize(new
+        {
+            schema = "autofight-physical-build-preflight/1",
+            state = report.State.ToString(),
+            pinnedSha256 = report.PinnedSha256,
+            observedSha256 = report.ObservedSha256,
+            fileLength = report.FileLength,
+            lastWriteUtc = report.LastWriteUtc,
+            matchesPinnedFingerprint = report.MatchesPinnedFingerprint,
+            nativeOffsetsRequalified = false,
+            canAutomate = false,
+            note = "On-disk build comparison only. A changed build requires independent offset requalification before native reads."
+        }));
+        return report.MatchesPinnedFingerprint ? 0 : 2;
     }
 
     /// <summary>

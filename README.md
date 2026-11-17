@@ -111,6 +111,16 @@ dotnet run --project .\src\Rift.Automation.Desktop\Rift.Automation.Desktop.cspro
 
 Tests exercise synthetic/offline cases. A passing smoke test does **not** establish a visible desktop experience or a successful live game input.
 
+### RIFT game-update compatibility preflight (offline)
+
+Before and after a RIFT client update, compare a **caller-specified executable file** against AutoFight's exact-build native XYZ fingerprint without opening RIFT or scanning game memory:
+
+```powershell
+dotnet run --project .\src\Rift.Automation.Desktop\Rift.Automation.Desktop.csproj -c Release -- --physical-build-check "C:\Program Files (x86)\Glyph\Games\RIFT\Live\rift_x64.exe"
+```
+
+This disk-only command emits redacted JSON: `MatchesPinnedBuild` (exit 0), `RequiresRequalification` (exit 2), or an unavailable/invalid state (exit 2). Its read has a 30-second command deadline and never updates the embedded SHA or native offsets. Even an exact file match is **not** live telemetry qualification or combat authority. See the [2026-11-17 pre-update baseline and post-update checklist](docs/GAME-UPDATE-READINESS-2026-11-17.md).
+
 ### Native XYZ diagnostic (physical RIFT)
 
 The new standalone reader is **read-only**. Run `--clients` first to obtain the exact PID and `Identity` (`PID:process-start-UTC-ticks`), then use those values in the native commands:
