@@ -138,6 +138,10 @@ public sealed record LiveReaderSnapshot(
 
     // Diagnostic only. Never authorizes combat or asserts live source qualification.
     public TargetVitalsCandidateDiagnostic? TargetVitalsCandidate { get; init; }
+
+    // Comparison across scans; useful for debugging repeats and resets, but
+    // cannot qualify a source or establish freshness on its own.
+    public TargetVitalsProducerProgressDiagnostic? TargetVitalsProgress { get; init; }
 }
 
 public static class LiveOutput

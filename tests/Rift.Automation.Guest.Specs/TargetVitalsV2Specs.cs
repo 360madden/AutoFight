@@ -490,6 +490,56 @@ internal static class TargetVitalsV2Specs
                 received.EnvelopeSha256 == candidate.EnvelopeSha256,
                 "physical host retains exact producer data without qualification");
         });
+        test("target vitals v2 producer progression diagnoses repeats and resets without qualification", () =>
+        {
+            TargetVitalsCandidateDiagnostic Candidate(long sequence, double clock, string target, char hash,
+                long epoch = 1) =>
+                new("candidate-unqualified", 1, sequence, target, 40, 100)
+                {
+                    PlayerId = "player",
+                    Epoch = epoch,
+                    ProducerClock = clock,
+                    FrameSha256 = new string(hash, 64),
+                    EnvelopeSha256 = new string(hash, 64)
+                };
+            var progress = new TargetVitalsProducerProgressTracker();
+            var a1 = Candidate(2, 12.5, "a", 'a');
+            var a2 = Candidate(3, 13.5, "a", 'b');
+            check(progress.Observe(a1).Status == "baseline-unqualified", "first observation is not proof of advance");
+            check(progress.Observe(a1).Status == "repeated-unqualified", "identical frame has no progress");
+            var advanced = progress.Observe(a2);
+            check(advanced is { Status: "advanced-unqualified", Sequence: 3, PreviousSequence: 2,
+                ProducerClock: 13.5, PreviousProducerClock: 12.5 }, "advancing candidate compared across scans");
+            check(progress.Observe(a2 with { FrameSha256 = new string('c', 64) }).Status ==
+                "invalid-progression", "contradictory same-sequence bytes invalidate baseline");
+            check(progress.Observe(a2).Status == "baseline-unqualified", "recovery starts a new baseline");
+            var b1 = Candidate(4, 14.5, "b", 'd');
+            check(progress.Observe(b1).Status == "source-changed-unqualified", "target switch is not old-source progress");
+            check(progress.Observe(Candidate(5, 15.5, "b", 'e')).Status == "advanced-unqualified",
+                "new target may independently advance");
+            check(progress.Observe(new("conflict", 2, null, null, null, null)).Status == "conflict" &&
+                progress.Observe(b1).Status == "baseline-unqualified", "conflicting scan breaks continuity");
+            check(progress.Observe(Candidate(5, 15.5, "b", 'e', epoch: 2)).Status ==
+                "source-changed-unqualified", "epoch change is a separate baseline");
+            check(progress.Observe(Candidate(5, 16, "b", 'f', epoch: 2)).Status ==
+                "invalid-progression", "a clock-only change cannot advance sequence");
+            check(progress.Observe(Candidate(6, 16.5, "b", 'g', epoch: 2)).Status ==
+                "baseline-unqualified", "invalid progression cannot be bridged");
+            check(progress.Observe(new("not-found", 0, null, null, null, null)).Status == "not-found" &&
+                progress.Observe(null).Status == "unavailable" &&
+                progress.Observe(b1).Status == "baseline-unqualified", "missing scan resets baseline");
+            progress.Reset();
+            check(progress.Observe(b1).Status == "baseline-unqualified", "explicit reader restart resets baseline");
+            check(progress.Observe(b1 with { ProducerClock = null }).Status ==
+                "invalid-progression", "incomplete tuple never becomes progress");
+            foreach (var impossibleClock in new[] { double.NaN, double.PositiveInfinity, -1.0 })
+            {
+                var invalid = progress.Observe(b1 with { ProducerClock = impossibleClock });
+                check(invalid is { Status: "invalid-progression", ProducerClock: null } &&
+                    System.Text.Json.JsonSerializer.Serialize(invalid).Contains("invalid-progression"),
+                    "invalid producer clock is redacted and strict JSON serialization remains safe");
+            }
+        });
         test("target vitals v2 multi-scan guest-to-host lifecycle stays diagnostic only", () =>
         {
             const string nonce = "0123456789abcdef0123456789abcdef";
@@ -499,6 +549,7 @@ internal static class TargetVitalsV2Specs
                 id, nonce, 1234, 638000000000000000,
                 @"C:\RIFT\rift_x64.exe", new string('c', 64));
             var host = new Rift.Automation.Windows.PhysicalTelemetryIngest(binding, token);
+            var progress = new TargetVitalsProducerProgressTracker();
             var at = new DateTimeOffset(2026, 11, 16, 22, 0, 0, TimeSpan.Zero);
             byte[] Frame(long producerSequence, string targetId, double health) =>
                 Encoding.ASCII.GetBytes("RR2L1|" + nonce + "|AFT2|" +
@@ -536,8 +587,15 @@ internal static class TargetVitalsV2Specs
                     new LiveTargetReport(binding.GameProcessId, binding.GameProcessStartUtcTicks,
                         binding.GameExecutablePath, binding.GameExecutableSha256, nonce),
                     rr2, new LiveDeliveryReport(true, "ready", null, null, null))
-                { TargetVitalsCandidate = diagnostic };
+                {
+                    TargetVitalsCandidate = diagnostic,
+                    TargetVitalsProgress = progress.Observe(diagnostic)
+                };
                 var json = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(snapshot, JsonFormat.Options);
+                using var document = System.Text.Json.JsonDocument.Parse(json);
+                if (document.RootElement.GetProperty("targetVitalsProgress")
+                    .GetProperty("status").GetString() != snapshot.TargetVitalsProgress?.Status)
+                    return false;
                 return host.Accept(json, token, "127.0.0.1", receivedAt);
             }
             var a1 = Frame(2, "target-a", 40);

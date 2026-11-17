@@ -78,6 +78,7 @@ internal static class Program
         FastObservationSession? fastSession = null;
         FastObservationReport? lastFastObservation = null;
         FastObservationAnchorDiagnostic? fastObservationDiagnostic = null;
+        TargetVitalsProducerProgressTracker? targetVitalsProgressTracker = null;
         long outerSequence = 0;
         var failed = false;
 
@@ -128,6 +129,7 @@ internal static class Program
                     fastSession = null;
                     lastFastObservation = null;
                     fastObservationDiagnostic = null;
+                    targetVitalsProgressTracker = null;
                     if (hadAttachment)
                     {
                         nonce = NewNonce();
@@ -165,6 +167,7 @@ internal static class Program
                     fastSession = null;
                     lastFastObservation = null;
                     fastObservationDiagnostic = null;
+                    targetVitalsProgressTracker = new TargetVitalsProducerProgressTracker();
                 }
 
                 var freshnessOptions = new LiveFreshnessOptions
@@ -268,6 +271,9 @@ internal static class Program
                         ? createdFastSession
                         : null;
                 }
+                // AFT2 progress is diagnostic only. A repeat or apparent advance
+                // cannot promote memory candidates to a qualified health source.
+                var targetVitalsProgress = targetVitalsProgressTracker!.Observe(targetVitalsDiagnostic);
                 var sequence = ++outerSequence;
                 var beforeDelivery = CreateSnapshot(
                     instanceId,
@@ -287,7 +293,8 @@ internal static class Program
                     timeProvider,
                     lastFastObservation,
                     fastObservationDiagnostic,
-                    targetVitalsDiagnostic);
+                    targetVitalsDiagnostic,
+                    targetVitalsProgress);
                 await delivery.DeliverAsync(beforeDelivery, cancellation.Token);
                 var afterDelivery = CreateSnapshot(
                     instanceId,
@@ -307,7 +314,8 @@ internal static class Program
                     timeProvider,
                     lastFastObservation,
                     fastObservationDiagnostic,
-                    targetVitalsDiagnostic);
+                    targetVitalsDiagnostic,
+                    targetVitalsProgress);
                 await LiveOutput.WriteAtomicAsync(outputPath, afterDelivery, cancellation.Token);
                 PrintStatus(afterDelivery);
 
@@ -318,6 +326,7 @@ internal static class Program
                     fastSession = null;
                     lastFastObservation = null;
                     fastObservationDiagnostic = null;
+                    targetVitalsProgressTracker = null;
                     nonce = NewNonce();
                     PrintSessionIdentity(instanceId, nonce);
                     PrintBindingInstruction(nonce);
@@ -382,7 +391,8 @@ internal static class Program
         TimeProvider timeProvider,
         FastObservationReport? fastObservation,
         FastObservationAnchorDiagnostic? fastObservationDiagnostic,
-        TargetVitalsCandidateDiagnostic? targetVitalsDiagnostic)
+        TargetVitalsCandidateDiagnostic? targetVitalsDiagnostic,
+        TargetVitalsProducerProgressDiagnostic? targetVitalsProgress)
     {
         var publishedAt = timeProvider.GetTimestamp();
         return new(
@@ -409,7 +419,8 @@ internal static class Program
                 ? null
                 : LiveOutput.StampFastObservation(fastObservation, publishedAt, timeProvider),
             FastObservationDiagnostic = fastObservationDiagnostic,
-            TargetVitalsCandidate = targetVitalsDiagnostic
+            TargetVitalsCandidate = targetVitalsDiagnostic,
+            TargetVitalsProgress = targetVitalsProgress
         };
     }
 
@@ -568,11 +579,14 @@ internal static class Program
             : $" fastScan={snapshot.FastObservation.Scan.Status}" +
               $" fastFreshness={snapshot.FastObservation.FreshnessStatus}" +
               $" fastAgeMs={snapshot.FastObservation.LastAdvanceAgeMilliseconds?.ToString("F0") ?? "-"}";
+        var aft2Progress = snapshot.TargetVitalsProgress is null
+            ? string.Empty
+            : $" aft2Progress={snapshot.TargetVitalsProgress.Status}";
         Console.WriteLine(
             $"{snapshot.CapturedAtUtc} scan={snapshot.RiftReader2.Scan.Status} " +
             $"selection={snapshot.RiftReader2.SelectionStatus} freshness={snapshot.RiftReader2.FreshnessStatus} " +
             $"ageMs={snapshot.RiftReader2.LastAdvanceAgeMilliseconds?.ToString("F0") ?? "-"}" +
-            $"{fast} delivery={snapshot.Delivery.Status}");
+            $"{fast}{aft2Progress} delivery={snapshot.Delivery.Status}");
     }
 
     private static async Task DelayAsync(int milliseconds, CancellationToken cancellationToken)
