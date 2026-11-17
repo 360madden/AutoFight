@@ -1,6 +1,14 @@
 # AutoFight — Continuation Handoff (2026-11-16 04:33 EST)
 
-## Newest offline checkpoint — 2026-11-16 21:40 EST
+## Newest offline checkpoint — 2026-11-16 21:47 EST
+
+- **Baseline:** AMD-DESKTOP `C:\work\AutoFight` `main`; preceding selector/fast-region code `b2201bc` and docs `1b4dbfc` committed/pushed to GitHub; clean worktree before this follow-up.
+- **Scoped-read deadline correction:** `ScanCandidateRegions` previously could report `complete` even if the final native read / candidate collection elapsed beyond its budget. It now builds both candidate lists, checks cancellation, and calls a pure `FinalizeScopedCandidateScan` with a post-materialization monotonic clock reading. Expired results are incomplete `time-budget-exceeded`, keep counters but expose neither RR2A1 nor AFT2 candidates. Exactly equal deadline is allowed.
+- **Tests:** 182 Core + 234 Windows + 55 Guest = **471/471** offline specs; **7/7** WPF nonshown smoke; .NET 10 Release build **0 warnings/errors**; `git diff --check` exit 0. An initial concurrently invoked build had a CS2012 assembly-write collision; serial retry passed without source change.
+- **Independent gate:** `/root/scoped_deadline_review` independently verified machine, two exact source/test file SHA256 values, actual source call-site and settled test job outputs: **PASS, no P0/P1/P2**. Regression directly exercises the pure finalizer, not a simulated native syscall; guard cannot preempt a blocked synchronous Win32 read.
+- **Boundary:** No live RIFT/process scan, VM input/focus, addon reload, qualified HP or combat. Continue offline only; separate live qualification remains a future user-controlled gate.
+
+## Prior offline checkpoint — 2026-11-16 21:40 EST
 
 - **Machine:** verified AMD-DESKTOP, `C:\work\AutoFight` on `main`; prior reviewed provenance commit `bf79992` pushed and synchronized before this new change.
 - **AFT2 retained-frame ambiguity:** `TargetVitalsV2CandidateSelector` now rejects a completed candidate set with different producer epochs, player IDs, target IDs, sequence-inverted producer clocks, contradictory copies or more than 256 candidates. Identical duplicates and valid unordered copies still work. This remains candidate-only evidence, never producer freshness or authorization.
