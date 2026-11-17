@@ -20,6 +20,7 @@ public sealed class StationaryCombatPlanner
     private string? session;
     private long lastSequence = -1;
     private long lastAcquired = -1;
+    private long lastNowMs = -1;
     private bool stopped;
     private string? trackedTarget;
     private bool targetChangeLatched;
@@ -35,6 +36,7 @@ public sealed class StationaryCombatPlanner
         session = sessionId;
         lastSequence = -1;
         lastAcquired = -1;
+        lastNowMs = -1;
         stopped = false;
         trackedTarget = null;
         targetChangeLatched = false;
@@ -56,7 +58,7 @@ public sealed class StationaryCombatPlanner
     /// <summary>Record a hypothetical command dispatch; never issues an actual command.</summary>
     public bool BeginPreviewAttack(string commandId, string targetId, long nowMs)
     {
-        if (stopped || session is null || pendingSinceMs is not null ||
+        if (stopped || session is null || !AcceptNow(nowMs) || pendingSinceMs is not null ||
             !lastObservationReady || targetChangeLatched ||
             string.IsNullOrWhiteSpace(commandId) || string.IsNullOrWhiteSpace(targetId) || trackedTarget != targetId ||
             lastAcquired < 0 || nowMs < lastAcquired || nowMs - lastAcquired > 2000)
@@ -70,7 +72,8 @@ public sealed class StationaryCombatPlanner
 
     public bool CompletePreviewAttack(string commandId, string targetId, bool acknowledged, long nowMs)
     {
-        if (stopped || pendingSinceMs is null || pendingTarget != targetId || pendingCommandId != commandId)
+        if (stopped || session is null || !AcceptNow(nowMs) ||
+            pendingSinceMs is null || pendingTarget != targetId || pendingCommandId != commandId)
             return false;
         if (nowMs < pendingSinceMs.Value || nowMs - pendingSinceMs.Value > 3000)
         {
@@ -84,6 +87,20 @@ public sealed class StationaryCombatPlanner
         // A command acknowledgement does not prove damage or a completed cast.
         targetChangeLatched = true;
         return acknowledged;
+    }
+
+    // A failed or out-of-order clock call invalidates readiness and requires
+    // an explicit new session Reset; a later "earlier" time cannot resurrect it.
+    private bool AcceptNow(long nowMs)
+    {
+        if (nowMs < 0 || nowMs < lastNowMs)
+        {
+            InvalidatePending();
+            targetChangeLatched = true;
+            return false;
+        }
+        lastNowMs = nowMs;
+        return true;
     }
 
     private void InvalidatePending()
@@ -106,7 +123,9 @@ public sealed class StationaryCombatPlanner
             InvalidatePending();
             return new(CombatPhase.Idle, CombatIntent.None, "session-mismatch");
         }
-        if (nowMs < 0 || sample.AcquiredAtMs < 0 ||
+        if (!AcceptNow(nowMs))
+            return new(CombatPhase.Idle, CombatIntent.None, "clock-regressed");
+        if (sample.AcquiredAtMs < 0 ||
             sample.AcquiredAtMs > nowMs || nowMs - sample.AcquiredAtMs > 2000 ||
             sample.Sequence <= lastSequence || sample.AcquiredAtMs < lastAcquired)
         {

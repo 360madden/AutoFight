@@ -1,6 +1,8 @@
 # AutoFight combat-first M8 plan — 2026-11-15
 
-Status: approved direction; implementation and live combat not yet accepted.
+Status: approved combat-first direction; offline preview foundations exist, but live combat is not yet accepted.
+
+> **November 16, 2026 offline clock-hardening receipt:** `StationaryCombatPlanner` now maintains a per-session nondecreasing invocation-time watermark across `Evaluate`, `BeginPreviewAttack`, and `CompletePreviewAttack`. Negative or regressed clocks invalidate readiness/pending intent and latch reset-required; equal timestamps remain valid, and explicit `Reset` begins a new clock epoch. Additional deterministic tests cover expired-readiness revival, out-of-order acknowledgments, negative calls, foreign-session isolation and lower-clock Reset. **.NET 10 Release build: 0 warnings/errors; 179 Core + 232 Windows + 39 Guest = 450/450 specs; WPF smoke 7/7.** Independent reviewer `/root/combat_audit` reviewed exact source/test hashes and reported **PASS, no blocking findings**. Review limitation: `nowMs` must be the current invocation time, not a delayed event timestamp. No RIFT input, live telemetry or combat was performed. A separate target-loss/actor-continuity latch gap remains open; do not infer combat capability from this fix.
 
 ## Mission
 AutoFight is a standalone RIFT combat bot. First acceptance is one stationary character selecting a hostile target, issuing a bounded basic attack through AutoFight-owned input, observing target/player state and returning to idle or recovery. Navigation is supporting work, not the product.

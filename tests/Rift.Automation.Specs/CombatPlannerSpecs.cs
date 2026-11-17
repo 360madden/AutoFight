@@ -155,5 +155,65 @@ internal static class CombatPlannerSpecs
             p.Reset("a");
             Check(p.Evaluate(Sample(inRange: false), 100).Intent == CombatIntent.None, "range");
         });
+        Test("combat preview expired readiness cannot revive after clock rollback", () =>
+        {
+            var p = new StationaryCombatPlanner();
+            p.Reset("a");
+            Check(p.Evaluate(Sample(), 100).Intent == CombatIntent.RequestBasicAttack, "initial");
+            Check(!p.BeginPreviewAttack("cmd-1", "target-1", 2101), "expired");
+            Check(!p.BeginPreviewAttack("cmd-1", "target-1", 101), "rolled-back clock");
+            Check(p.Evaluate(Sample(2, 2102), 2102).Reason == "target-change-reset-required", "latch");
+        });
+        Test("combat preview later observation fences earlier acknowledgment", () =>
+        {
+            var p = new StationaryCombatPlanner();
+            p.Reset("a");
+            p.Evaluate(Sample(), 100);
+            Check(p.BeginPreviewAttack("cmd-1", "target-1", 100), "begin");
+            Check(p.Evaluate(Sample(2, 300), 300).Phase == CombatPhase.AttackPending, "pending");
+            Check(!p.CompletePreviewAttack("cmd-1", "target-1", true, 200), "backward acknowledgment rejected");
+            Check(p.Evaluate(Sample(3, 301), 301).Reason == "target-change-reset-required", "no revival");
+        });
+        Test("combat preview negative and reordered clock latch until reset", () =>
+        {
+            var p = new StationaryCombatPlanner();
+            p.Reset("a");
+            p.Evaluate(Sample(), 100);
+            Check(p.Evaluate(Sample(2, 99), 99).Reason == "clock-regressed", "backward Evaluate");
+            Check(p.Evaluate(Sample(3, 200), 200).Reason == "target-change-reset-required", "latched");
+            p.Reset("a");
+            Check(p.Evaluate(Sample(), -1).Reason == "clock-regressed", "negative clock");
+            Check(p.Evaluate(Sample(2, 101), 101).Intent == CombatIntent.None, "negative latched");
+        });
+        Test("combat preview rejects negative dispatch and acknowledgment clocks", () =>
+        {
+            var p = new StationaryCombatPlanner();
+            p.Reset("a");
+            p.Evaluate(Sample(), 100);
+            Check(!p.BeginPreviewAttack("cmd-1", "target-1", -1), "negative begin");
+            Check(p.Evaluate(Sample(2, 101), 101).Intent == CombatIntent.None, "dispatch fault latched");
+            p.Reset("a");
+            p.Evaluate(Sample(), 100);
+            Check(p.BeginPreviewAttack("cmd-1", "target-1", 100), "begin");
+            Check(!p.CompletePreviewAttack("cmd-1", "target-1", true, -1), "negative completion");
+            Check(p.Evaluate(Sample(2, 101), 101).Intent == CombatIntent.None, "completion fault latched");
+        });
+        Test("combat preview foreign-session time does not poison own session clock", () =>
+        {
+            var p = new StationaryCombatPlanner();
+            p.Reset("a");
+            Check(p.Evaluate(Sample() with { SessionId = "other" }, 5000).Reason == "session-mismatch", "foreign");
+            Check(p.Evaluate(Sample(), 100).Intent == CombatIntent.RequestBasicAttack, "own clock remains valid");
+        });
+        Test("combat preview equal monotonic times and Reset remain valid", () =>
+        {
+            var p = new StationaryCombatPlanner();
+            p.Reset("a");
+            Check(p.Evaluate(Sample(1, 200), 200).Intent == CombatIntent.RequestBasicAttack, "initial");
+            Check(p.BeginPreviewAttack("cmd-1", "target-1", 200), "equal begin");
+            Check(p.CompletePreviewAttack("cmd-1", "target-1", true, 200), "equal complete");
+            p.Reset("a");
+            Check(p.Evaluate(Sample(), 100).Intent == CombatIntent.RequestBasicAttack, "lower clock after Reset");
+        });
     }
 }
