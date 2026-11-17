@@ -103,6 +103,7 @@ internal static class SpecRunner
         CombatPlannerSpecs.Run();
         CombatEffectSpecs.Run();
         CombatOutcomeSpecs.Run();
+        CombatAttemptPreviewSpecs.Run();
         ReplaySpecs.Run();
         ReplayAnalysisSpecs.Run();
         Console.WriteLine($"Synthetic offline specs: {_passed} passed, {_failed} failed.");
