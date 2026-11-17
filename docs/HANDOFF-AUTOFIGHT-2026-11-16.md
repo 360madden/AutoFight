@@ -1,13 +1,23 @@
 # AutoFight — Continuation Handoff (2026-11-16 04:33 EST)
 
-## Newest offline checkpoint — 2026-11-16 22:07 EST
+## Newest offline checkpoint — 2026-11-16 22:18 EST
+
+- **Repository:** independently verified `AMD-DESKTOP`, `C:\work\AutoFight`, `main`, pushed previous `8ddb412`; new reviewed source commit `ffec2df`.
+- **Production-owned diagnostic:** GuestReader now creates `TargetVitalsProducerProgressTracker` on each stable process attachment and compares selected AFT2 reports from *both* full and bounded scoped scans. `Program` adds `targetVitalsProgress` to both live delivery and atomic local snapshot, and prints a concise console label; the physical host tolerates this additive root field without consuming or qualifying it.
+- **Classification:** `baseline-unqualified`, `repeated-unqualified`, `advanced-unqualified`, `source-changed-unqualified`, `invalid-progression`; absent, conflict and unavailable observations clear baseline. Changing epoch/player/target starts a new baseline. Process loss, attachment replacement and invalidation discard the tracker. Apparent producer advance is not established game freshness.
+- **Reliability:** Independent elevated `/root/aft2_progress_review` identified nonfinite diagnostic clocks as a potential strict-JSON serialization failure; final implementation null-redacts NaN/Infinity/negative and the added regression serializes these cases. Final review **PASS no remaining P0/P1/P2**, exact four-file SHA hashes recorded in review.
+- **Offline acceptance:** Core **182/182**, Windows **236/236**, Guest **57/57**, total **475/475**; WPF nonshown **7/7**; .NET 10 Release **0 warnings/errors**, diff check exit 0; `GuestReader --help` returns 0 without scanning. No physical RIFT scan, VM, gameplay, live source qualification or combat input.
+- **Remaining truth gate:** `TargetVitalsV2Intake`/`TargetVitalsV2Continuity` are still not in the real scan/reader path; the new tracker is an *observation classifier*, not a freshness validator. `PhysicalTargetVitalsCandidate.SourceQualified` remains hardcoded false. The host ignores `targetVitalsProgress` and continues to parse unqualified candidate tuples only.
+- **Next practical offline M8 task:** Compose a pure single-attempt stationary attack preview using existing `StationaryCombatPlanner`, `CombatOutcomeAssessor` and `CombatEffectAssessor`, retaining no automatic rearm/retry or live input. Align the planner's 3s acknowledgment deadline with the outcome assessor's wider window via deterministic tests; no live combat until separately qualified sources and explicit experiment.
+
+## Prior offline checkpoint — 2026-11-16 22:07 EST
 
 - **Baseline:** independently verified AMD-DESKTOP, `C:\work\AutoFight`, clean `main` at pushed HEAD `0f3567a`; earlier stale diagnostic fix `69a2929` and docs `0f3567a` both published.
 - **Small test-only integration:** New deterministic end-to-end GuestReader AFT2 diagnostic fixture uses fresh `TargetVitalsV2CandidateAccumulator` per synthetic scan, split envelopes and both heap-copy orders, then `TargetVitalsCandidateReporting.Build` → real `LiveReaderSnapshot` `JsonFormat.Options` serialization → `PhysicalTelemetryIngest.Accept`.
 - **Observed in synthetic fixtures:** target A HP40 seq2/clock12.5 → HP30 seq3/clock13.5; newer outer receipt with frozen producer remains unqualified; valid mixed A+B copies produce `conflict` and no HP; B-only seq4 produces typed diagnostic; completed empty scan produces `not-found`; B reappears unqualified; unstable identity produces `unavailable` and clears HP; another B-only scan recovers unqualified. No permanent live freshness inferred from either clock.
 - **Validation:** 182 Core + 236 Windows + 56 Guest = **474/474** synthetic specs, 7/7 WPF nonshown smoke, .NET 10 Release 0 warnings/errors and clean `git diff --check`. Independent `/root/aft2_stream_audit` reviewed exact test SHA and reported **PASS no P0/P1/P2**; source not changed.
 - **Unresolved gate:** Actual `Program` orchestration, true native scanning, network delivery, live AFT2 addon load/progress, source pin, HP/target identity and attack result remain unverified. `TargetVitalsV2Intake` and `TargetVitalsV2Continuity` exist but are only used in tests, not the live program; do **not** mistake their standalone regression coverage for an enforced live producer stream. No RIFT/VM/process-memory/input action during this checkpoint.
-- **Next:** commit/push the reviewed synthetic test and handoff, then assess the narrowest production-owned producer progression diagnostic/qualification seam or request a separately scoped read-only physical RIFT validation when offline evidence can no longer advance.
+- **Integration:** Synthetic test commit `33c0254` and handoff commit `8ddb412` were both pushed to `origin/main` before the new 22:18 progress milestone. The next producer diagnostic seam was implemented in reviewed source commit `ffec2df`.
 
 ## Prior offline checkpoint — 2026-11-16 22:00 EST
 
