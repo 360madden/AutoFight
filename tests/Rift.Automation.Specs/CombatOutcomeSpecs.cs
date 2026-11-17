@@ -33,6 +33,33 @@ internal static class CombatOutcomeSpecs
             Check(CombatOutcomeAssessor.Assess(Attempt(), Before(), After() with { AcquiredAtMs = 250 }).Status == CombatOutcomeStatus.Invalid, "simultaneous ack");
             Check(CombatOutcomeAssessor.Assess(Attempt() with { DispatchedAtMs = 3000, AcknowledgedAtMs = 3050 }, Before(), After() with { AcquiredAtMs = 3100 }).Status == CombatOutcomeStatus.Invalid, "old baseline");
         });
+        Test("combat outcome acknowledgment deadline matches stationary preview planner", () =>
+        {
+            bool PlannerAccepts(long acknowledgedAtMs)
+            {
+                var planner = new StationaryCombatPlanner();
+                planner.Reset("session");
+                var observed = new CombatObservation("session", 1, 150, true, true,
+                    false, "enemy", true, true, true, true);
+                Check(planner.Evaluate(observed, 150).Intent == CombatIntent.RequestBasicAttack,
+                    "qualified synthetic preview ready");
+                Check(planner.BeginPreviewAttack("cmd-1", "enemy", 200), "synthetic dispatch");
+                return planner.CompletePreviewAttack("cmd-1", "enemy", true, acknowledgedAtMs);
+            }
+
+            var edge = Attempt() with { AcknowledgedAtMs = 3200 };
+            var late = Attempt() with { AcknowledgedAtMs = 3201 };
+            Check(PlannerAccepts(3200), "planner accepts exact 3000ms boundary");
+            Check(!PlannerAccepts(3201), "planner rejects 3001ms acknowledgment");
+            var within = CombatOutcomeAssessor.Assess(edge, Before(),
+                After() with { AcquiredAtMs = 3201 });
+            var outside = CombatOutcomeAssessor.Assess(late, Before(),
+                After() with { AcquiredAtMs = 3202 });
+            Check(within.Status == CombatOutcomeStatus.ObservedHealthDecrease &&
+                !within.ProvesCommandCausedEffect, "assessor accepts 3000ms boundary without attribution");
+            Check(outside.Status == CombatOutcomeStatus.Invalid &&
+                outside.Reason == "attempt-window-invalid", "assessor rejects planner-invalid 3001ms acknowledgment");
+        });
         Test("combat outcome rejects oversized windows and invalid health", () =>
         {
             Check(CombatOutcomeAssessor.Assess(Attempt(), Before(), After() with { AcquiredAtMs = 11000 }).Status == CombatOutcomeStatus.Invalid, "window");

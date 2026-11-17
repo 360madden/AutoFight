@@ -27,6 +27,8 @@ public static class CombatOutcomeAssessor
             attempt.SessionId != before.SessionId || attempt.SessionId != after.SessionId ||
             attempt.TargetId != before.TargetId || attempt.TargetId != after.TargetId ||
             attempt.DispatchedAtMs < 0 || attempt.AcknowledgedAtMs < attempt.DispatchedAtMs ||
+            // Match StationaryCombatPlanner's accepted preview-ack deadline.
+            attempt.AcknowledgedAtMs - attempt.DispatchedAtMs > 3000 ||
             before.AcquiredAtMs >= attempt.DispatchedAtMs ||
             attempt.DispatchedAtMs - before.AcquiredAtMs > 2000 ||
             after.AcquiredAtMs <= attempt.AcknowledgedAtMs ||
