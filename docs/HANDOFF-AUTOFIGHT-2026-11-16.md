@@ -1,6 +1,15 @@
 # AutoFight — Continuation Handoff (2026-11-16 04:33 EST)
 
-## Newest offline checkpoint — 2026-11-16 22:25 EST
+## Newest offline checkpoint — 2026-11-16 22:35 EST
+
+- **Machine/repo:** AMD-DESKTOP, `C:\work\AutoFight`, `main`; clean pushed baseline `f0e9403`, reviewed source commit `c8e5a34`.
+- **Functional Core increment:** New standalone `StationaryCombatAttemptPreview` composes `StationaryCombatPlanner`, `CombatOutcomeAssessor` and `CombatEffectAssessor` without altering these proven components. Public API is a single-use state machine: `ObserveReadiness`, `BeginPreviewAttack`, `ObservePending`, `CompletePreviewAttack`, `ObservePostAckHealth`, `AdvanceTime`, `Stop`. It has no Reset, input or automatic retry. `CombatPreviewAttemptReport.CanExecute` is permanently false; `CombatOutcomeAssessment.ProvesCommandCausedEffect` remains false.
+- **Evidence contract:** initial synthetic combat/HP observations must both be qualified and match session, target, sequence and acquisition timestamp with finite positive HP; dispatch strictly after baseline within 2000ms; matching affirmative acknowledgment within 3000ms; post-ack sample strictly newer and delivered no later than 10000ms since dispatch. An optional pending observation tracks greater sequence and target/source continuity. First invalid result, Stop, clock rollback or timeout permanently terminates; after-ack target HP=0 can be a valid historical decrease.
+- **Independent review and corrections:** Elevated `/root/one_attempt_code_review` independently verified AMD-DESKTOP, hashes and test outcomes; identified two P2 edges (delayed post-ack receipt bypassing timeout without an earlier tick, and pre-ack alive/HP0 contradiction). Both fixed and covered; final **PASS no remaining P0/P1/P2**.
+- **Offline acceptance:** Core **191/191**, Windows **236/236**, Guest **57/57** = **484/484**, WPF smoke **7/7**, .NET 10 Release **0 warnings/errors**, diff check exit 0. No RIFT memory scan, game/VM input or current qualified target-health stream.
+- **Next:** pure replay/fixture integration of the single-use coordinator and exact failure-state review, then independently qualify current-game telemetry *before* considering a separately authorized live experiment. AFT2's `SourceQualified` is still hardcoded false; no promotion by synthetic evidence.
+
+## Prior offline checkpoint — 2026-11-16 22:25 EST
 
 - **Machine/repo:** AMD-DESKTOP, `C:\work\AutoFight`, `main`; previous clean pushed HEAD `697cad1`, reviewed code commit `4786c56`.
 - **Verified mismatch:** Planner's `CompletePreviewAttack` rejects an acknowledgement received later than dispatch +3000 ms, but `CombatOutcomeAssessor` had no corresponding acknowledgement bound while allowing a post-ack health observation within 10000 ms of dispatch. Independent cross-component test captured **182 passed + 1 expected RED**, then **183/183 Core GREEN** after adding a bounded acknowledgement guard.
