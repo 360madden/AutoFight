@@ -169,19 +169,34 @@ public sealed class StationaryCombatPlanner
             }
             return new(CombatPhase.AttackPending, CombatIntent.None, "awaiting-command-result");
         }
+        // A known target's loss, identity swap or death must latch before any
+        // unrelated missing player/range/hostility field can mask continuity.
+        if (targetChangeLatched)
+            return new(CombatPhase.Idle, CombatIntent.None, "target-change-reset-required");
+        if (trackedTarget is not null)
+        {
+            if (sample.TargetId is null)
+            {
+                targetChangeLatched = true;
+                return new(CombatPhase.Idle, CombatIntent.None, "target-lost-reset-required");
+            }
+            if (!string.Equals(trackedTarget, sample.TargetId, StringComparison.Ordinal))
+            {
+                targetChangeLatched = true;
+                return new(CombatPhase.Idle, CombatIntent.None, "target-changed");
+            }
+            if (sample.TargetAlive == false)
+            {
+                targetChangeLatched = true;
+                return new(CombatPhase.Idle, CombatIntent.None, "target-dead-reset-required");
+            }
+        }
         if (sample.PlayerAlive is null || sample.RecoveryRequired is null)
             return new(CombatPhase.Idle, CombatIntent.None, "player-state-unknown");
         if (sample.PlayerAlive == false || sample.RecoveryRequired == true)
             return new(CombatPhase.Recover, CombatIntent.WaitForRecovery, "recovery-needed");
-        if (targetChangeLatched)
-            return new(CombatPhase.Idle, CombatIntent.None, "target-change-reset-required");
         if (sample.TargetId is null)
             return new(CombatPhase.Acquire, CombatIntent.RequestTarget, "target-unavailable");
-        if (trackedTarget is not null && !string.Equals(trackedTarget, sample.TargetId, StringComparison.Ordinal))
-        {
-            targetChangeLatched = true;
-            return new(CombatPhase.Idle, CombatIntent.None, "target-changed");
-        }
         if (string.IsNullOrWhiteSpace(sample.TargetId) || sample.TargetAlive is null ||
             sample.TargetHostile is null || sample.TargetInRange is null)
             return new(CombatPhase.Idle, CombatIntent.None, "target-state-unknown");

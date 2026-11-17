@@ -75,6 +75,52 @@ internal static class CombatPlannerSpecs
             Check(p.Evaluate(Sample(3) with { TargetId = null }, 100).Intent == CombatIntent.None, "no bypass via null");
             Check(p.Evaluate(Sample(4), 100).Intent == CombatIntent.None, "still latched");
         });
+        Test("combat preview observed target loss latches identity until Reset", () =>
+        {
+            var p = new StationaryCombatPlanner();
+            p.Reset("a");
+            Check(p.Evaluate(Sample(), 100).Intent == CombatIntent.RequestBasicAttack, "tracked");
+            var lost = p.Evaluate(Sample(2, 200) with { TargetId = null }, 200);
+            Check(lost.Reason == "target-lost-reset-required" && lost.Intent == CombatIntent.None, "loss latches");
+            Check(p.Evaluate(Sample(3, 300), 300).Intent == CombatIntent.None, "same text ID not enough");
+            Check(!p.BeginPreviewAttack("cmd-1", "target-1", 300), "no preview dispatch");
+            p.Reset("a");
+            Check(p.Evaluate(Sample(), 100).Intent == CombatIntent.RequestBasicAttack, "explicit reset permits fresh preview");
+        });
+        Test("combat preview previously tracked dead target cannot silently revive", () =>
+        {
+            var p = new StationaryCombatPlanner();
+            p.Reset("a");
+            Check(p.Evaluate(Sample(), 100).Intent == CombatIntent.RequestBasicAttack, "tracked");
+            var dead = p.Evaluate(Sample(2, 200) with { TargetAlive = false }, 200);
+            Check(dead.Reason == "target-dead-reset-required" && dead.Intent == CombatIntent.None, "death latches");
+            Check(p.Evaluate(Sample(3, 300), 300).Intent == CombatIntent.None, "same ID after death");
+            p.Reset("a");
+            Check(p.Evaluate(Sample() with { TargetAlive = false }, 100).Intent == CombatIntent.RequestTarget, "initial dead remains acquire");
+        });
+        Test("combat preview target discontinuity preempts unrelated unknown fields", () =>
+        {
+            var p = new StationaryCombatPlanner();
+            p.Reset("a");
+            p.Evaluate(Sample(), 100);
+            Check(p.Evaluate(Sample(2, 200) with { TargetId = null, PlayerAlive = null }, 200).Reason ==
+                "target-lost-reset-required", "loss despite unknown player");
+            Check(p.Evaluate(Sample(3, 300), 300).Intent == CombatIntent.None, "loss remains latched");
+            p.Reset("a");
+            p.Evaluate(Sample(), 100);
+            Check(p.Evaluate(Sample(2, 200) with { TargetAlive = false, TargetInRange = null, TargetHostile = null }, 200).Reason ==
+                "target-dead-reset-required", "death despite unknown range/hostility");
+            Check(p.Evaluate(Sample(3, 300), 300).Intent == CombatIntent.None, "death remains latched");
+            p.Reset("a");
+            p.Evaluate(Sample(), 100);
+            Check(p.Evaluate(Sample(2, 200) with { TargetId = "other", PlayerAlive = null }, 200).Reason ==
+                "target-changed", "identity change despite unknown player");
+            Check(p.Evaluate(Sample(3, 300), 300).Intent == CombatIntent.None, "swap remains latched");
+            p.Reset("a");
+            p.Evaluate(Sample(), 100);
+            Check(p.Evaluate(Sample(2, 200) with { TargetId = null, PlayerAlive = false }, 200).Phase ==
+                CombatPhase.Recover, "dead player recovery retains precedence");
+        });
         Test("combat preview pending attack suppresses repeated command", () =>
         {
             var p = new StationaryCombatPlanner();
