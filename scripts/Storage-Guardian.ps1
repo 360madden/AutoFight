@@ -37,7 +37,7 @@ function Test-Reparse([IO.FileSystemInfo]$Item) {
 }
 
 # Walk explicit real directories only; never recurse through junctions or symlinks.
-function Get-SafeFiles([string]$Directory) {
+function Get-SafeFiles([string]$Directory, [switch]$SkipNestedGit) {
     if (-not (Test-Path -LiteralPath $Directory -PathType Container)) { return }
     $stack = New-Object 'System.Collections.Generic.Stack[string]'
     $stack.Push($Directory)
@@ -50,10 +50,12 @@ function Get-SafeFiles([string]$Directory) {
         $here = $stack.Pop()
         $currentDir = Get-Item -LiteralPath $here -Force -ErrorAction Stop
         if (Test-Reparse $currentDir) { continue }
+        # Cleanup excludes nested Git checkouts; Audit retains their real file sizes.
+        if ($SkipNestedGit -and (Test-Path -LiteralPath (Join-Path $here '.git'))) { continue }
         # Stream each directory. Bound queued directories *before* the stack grows.
         Get-ChildItem -LiteralPath $here -Force -ErrorAction Stop | ForEach-Object {
             $entry = $_
-            if (-not (Test-Reparse $entry)) {
+            if (-not (Test-Reparse $entry) -and -not ($SkipNestedGit -and $entry.Name -ieq '.git')) {
                 if ($entry.PSIsContainer) {
                     if ($visitedDirectories + $stack.Count -ge $ScanDirectoryLimit) {
                         throw 'Storage directory scan limit exceeded; no partial status or cleanup permitted.'
@@ -175,17 +177,43 @@ if ($Mode -eq 'Audit') {
 if ($null -eq (Get-Command git -ErrorAction SilentlyContinue)) {
     throw 'Preview and Clean require Git to protect source-controlled files.'
 }
-$gitTop = @(& git -C $rootPath rev-parse --show-toplevel 2>$null)
-if ($LASTEXITCODE -ne 0 -or $gitTop.Count -ne 1 -or
-    -not [string]::Equals([IO.Path]::GetFullPath($gitTop[0]).TrimEnd('\'), $rootPath,
-        [StringComparison]::OrdinalIgnoreCase)) {
-    throw 'Preview and Clean require an exact repository-root Git checkout.'
+# Windows PowerShell 5.1 otherwise decodes native Git UTF-8 output as OEM text.
+# Restore the caller's encoding even when Git fails.
+$savedConsoleEncoding = [Console]::OutputEncoding
+try {
+    [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false, $true)
+    $gitTop = @(& git -C $rootPath rev-parse --show-toplevel 2>$null)
+    $gitTopExit = $LASTEXITCODE
+    if ($gitTopExit -ne 0 -or $gitTop.Count -ne 1 -or
+        -not [string]::Equals([IO.Path]::GetFullPath($gitTop[0]).TrimEnd('\'), $rootPath,
+            [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Preview and Clean require an exact repository-root Git checkout.'
+    }
+    $trackedOutput = @(& git -C $rootPath ls-files -z -- src tests)
+    if ($LASTEXITCODE -ne 0) { throw 'Git tracked-file inventory failed; no cleanup allowed.' }
+} finally {
+    [Console]::OutputEncoding = $savedConsoleEncoding
 }
-$trackedOutput = @(& git -C $rootPath ls-files -z -- src tests)
-if ($LASTEXITCODE -ne 0) { throw 'Git tracked-file inventory failed; no cleanup allowed.' }
 $trackedSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 foreach ($name in ([string]::Join('', [string[]]$trackedOutput)).Split([char]0)) {
     if (-not [string]::IsNullOrEmpty($name)) { $null = $trackedSet.Add($name.Replace('\','/')) }
+}
+
+# Refuse any candidate in a child Git checkout, submodule or worktree,
+# including .git file markers. Recheck immediately before deletion too.
+function Test-NestedGitBoundary([string]$CandidatePath) {
+    if ((Split-Path -Leaf $CandidatePath) -ieq '.git' -or
+        -not $CandidatePath.StartsWith($rootPath + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        return $true
+    }
+    $parent = Split-Path -Parent $CandidatePath
+    $walk = $rootPath
+    foreach ($part in $parent.Substring($rootPath.Length + 1).Split([char]'\')) {
+        if ($part -ieq '.git') { return $true }
+        $walk = Join-Path $walk $part
+        if (Test-Path -LiteralPath (Join-Path $walk '.git')) { return $true }
+    }
+    return $false
 }
 
 $cutoffUtc = [DateTime]::UtcNow.AddDays(-$MinimumAgeDays)
@@ -196,8 +224,10 @@ foreach ($tree in @('src','tests')) {
     $treeRoot = Join-Path $rootPath $tree
     if (-not (Test-Path -LiteralPath $treeRoot -PathType Container)) { continue }
     if (Test-Reparse (Get-Item -LiteralPath $treeRoot -Force)) { continue }
+    if (Test-Path -LiteralPath (Join-Path $treeRoot '.git')) { continue }
     foreach ($project in (Get-ChildItem -LiteralPath $treeRoot -Directory -Force)) {
         if (Test-Reparse $project) { continue }
+        if (Test-Path -LiteralPath (Join-Path $project.FullName '.git')) { continue }
         $csprojs = @(Get-ChildItem -LiteralPath $project.FullName -File -Force -Filter '*.csproj')
         if ($csprojs.Count -eq 0) { continue }
         foreach ($bucket in @('bin','obj')) {
@@ -205,7 +235,7 @@ foreach ($tree in @('src','tests')) {
             if (-not (Test-Path -LiteralPath $bucketPath -PathType Container)) { continue }
             if (Test-Reparse (Get-Item -LiteralPath $bucketPath -Force)) { continue }
             # Stream generated files too; only eligible candidates are retained (capped).
-            Get-SafeFiles $bucketPath | ForEach-Object {
+            Get-SafeFiles $bucketPath -SkipNestedGit | ForEach-Object {
                 $file = $_
                 if ($file.LastWriteTimeUtc -lt $cutoffUtc) {
                     $repoRelative = $file.FullName.Substring($rootPath.Length + 1).Replace('\','/')
@@ -220,6 +250,14 @@ foreach ($tree in @('src','tests')) {
                 }
             }
         }
+    }
+}
+
+# Preflight every candidate before deleting any; never partially clean a list
+# that acquired a nested Git boundary since its initial scan.
+foreach ($candidate in $candidates) {
+    if (Test-NestedGitBoundary $candidate.Path) {
+        throw 'Nested Git checkout boundary appeared in cleanup candidates; no files removed.'
     }
 }
 
@@ -244,6 +282,9 @@ foreach ($candidate in $candidates) {
     if ($parts.Length -lt 4 -or $parts[0] -notin @('src','tests') -or
         $parts[2] -notin @('bin','obj')) {
         throw 'Unexpected candidate path.'
+    }
+    if (Test-NestedGitBoundary $path) {
+        throw 'Nested Git checkout boundary appeared before deletion; cleanup halted.'
     }
     # Check every path component again immediately before deleting a file.
     $walk = $rootPath

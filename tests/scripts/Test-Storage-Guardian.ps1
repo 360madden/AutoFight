@@ -54,16 +54,42 @@ try {
     $oldNonProject = Join-Path $fixture 'src\NotAProject\bin\old.txt'
     $protectedArtifact = Join-Path $fixture 'artifacts\local\capture.bin'
     $protectedGit = Join-Path $fixture '.git\objects\retained'
+    $unicodeTracked = Join-Path $project ('obj\Release\net10.0\unicode-' + [char]0xE9 + '.dll')
+    $unicodeRelative = 'src/Demo/obj/Release/net10.0/unicode-' + [char]0xE9 + '.dll'
     Put-File $oldBin 'old bin' 45
     Put-File $oldObj 'old obj' 45
     Put-File $freshBuild 'new build'
     Put-File $oldSource 'old source' 45
     Put-File $oldTrackedBuild 'intentionally tracked old file' 45
-    $null = & git -C $fixture add --force -- 'src/Demo/obj/Release/net10.0/tracked-old.txt'
+    Put-File $unicodeTracked 'unicode tracked bytes' 45
+    $null = & git -C $fixture add --force -- 'src/Demo/obj/Release/net10.0/tracked-old.txt' $unicodeRelative
     if ($LASTEXITCODE -ne 0) { throw 'Unable to stage tracked-file protection fixture.' }
     Put-File $oldNonProject 'not a .NET project' 45
     Put-File $protectedArtifact 'captured evidence' 45
     Put-File $protectedGit 'git object' 45
+
+    # Old nested checkout, .git-file worktree and project submodule markers
+    # must never become cleanup candidates, including their Git metadata.
+    $embedded = Join-Path $project 'bin\embedded'
+    $embeddedTracked = Join-Path $embedded 'tracked-source.cs'
+    Put-File $embeddedTracked 'nested tracked content' 45
+    $null = & git -C $embedded init --quiet
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to initialize nested checkout fixture.' }
+    $null = & git -C $embedded add -- 'tracked-source.cs'
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to stage nested tracked source fixture.' }
+    $embeddedMetadata = Join-Path $embedded '.git\config'
+    (Get-Item -LiteralPath $embeddedMetadata).LastWriteTimeUtc = [DateTime]::UtcNow.AddDays(-45)
+    $worktreeDir = Join-Path $project 'obj\linked-worktree'
+    $worktreeMarker = Join-Path $worktreeDir '.git'
+    $worktreeSource = Join-Path $worktreeDir 'tracked-source.cs'
+    Put-File $worktreeMarker 'gitdir: unavailable-private-worktree' 45
+    Put-File $worktreeSource 'worktree source content' 45
+    $foreignProject = Join-Path $fixture 'src\ForeignProject'
+    $foreignMarker = Join-Path $foreignProject '.git'
+    $foreignBuild = Join-Path $foreignProject 'bin\Release\old.dll'
+    Put-File (Join-Path $foreignProject 'Foreign.csproj') '<Project />'
+    Put-File $foreignMarker 'gitdir: unavailable-private-submodule' 45
+    Put-File $foreignBuild 'foreign repository build bytes' 45
 
     $audit = Run-Guardian @{ Mode='Audit' }
     Assert ([bool]($audit -match 'status=Normal')) 'audit defaults to non-destructive normal status'
@@ -72,6 +98,16 @@ try {
     $preview = Run-Guardian @{ Mode='Preview' }
     Assert ([bool]($preview -match 'Stale generated-file candidates: 2 files')) 'preview recognizes only the two old generated files'
     Assert ((Test-Path -LiteralPath $oldBin) -and (Test-Path -LiteralPath $oldObj)) 'preview does not delete candidates'
+    Assert (-not [bool]($preview -match 'embedded|linked-worktree|ForeignProject')) 'preview excludes nested Git checkout, worktree and submodule'
+    $priorEncoding = [Console]::OutputEncoding
+    try {
+        [Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(437)
+        $oemPreview = Run-Guardian @{ Mode='Preview' }
+        Assert ([bool]($oemPreview -match 'Stale generated-file candidates: 2 files')) 'OEM-437 preview protects Unicode tracked file'
+        Assert ([Console]::OutputEncoding.CodePage -eq 437) 'successful Git inventory restores caller encoding'
+    } finally {
+        [Console]::OutputEncoding = $priorEncoding
+    }
     Assert (Denied @{ Mode='Clean' } 'Clean requires') 'clean without confirmation is denied'
     Assert (Denied @{ Mode='Clean'; ConfirmCleanup='wrong' } 'Clean requires') 'incorrect cleanup confirmation is denied'
     Assert (Denied @{ Mode='Preview'; RecordHistory=$true } 'History can be recorded only') 'preview cannot silently mutate history'
@@ -94,6 +130,14 @@ try {
     try {
         Assert (Denied @{ Mode='Preview' } 'exact repository-root Git checkout') 'preview requires exact Git root rather than parent Git checkout'
         Assert (Denied @{ Mode='Clean'; ConfirmCleanup='DELETE_STALE_BUILD_FILES' } 'exact repository-root Git checkout') 'clean requires exact Git root rather than parent Git checkout'
+        $priorEncoding = [Console]::OutputEncoding
+        try {
+            [Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(437)
+            Assert (Denied @{ Mode='Preview' } 'exact repository-root Git checkout') 'OEM-437 Git failure rejects preview'
+            Assert ([Console]::OutputEncoding.CodePage -eq 437) 'failed Git inventory restores caller encoding'
+        } finally {
+            [Console]::OutputEncoding = $priorEncoding
+        }
     } finally {
         Move-Item -LiteralPath $fixtureGitOffline -Destination $fixtureGit -ErrorAction Stop
     }
@@ -114,12 +158,28 @@ try {
         Write-Output 'SKIP: junction fixture unsupported by this PowerShell/Windows setup'
     }
 
-    $clean = Run-Guardian @{ Mode='Clean'; ConfirmCleanup='DELETE_STALE_BUILD_FILES' }
+    $priorEncoding = [Console]::OutputEncoding
+    try {
+        [Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(437)
+        $clean = Run-Guardian @{ Mode='Clean'; ConfirmCleanup='DELETE_STALE_BUILD_FILES' }
+        Assert ([Console]::OutputEncoding.CodePage -eq 437) 'confirmed cleanup restores OEM-437 caller encoding'
+    } finally {
+        [Console]::OutputEncoding = $priorEncoding
+    }
     Assert ([bool]($clean -match 'Cleanup: removed 2 generated files')) 'confirmed cleanup deletes only stale fixture build files'
     Assert ((-not (Test-Path -LiteralPath $oldBin)) -and (-not (Test-Path -LiteralPath $oldObj))) 'stale generated fixture files are absent'
     Assert ((Test-Path -LiteralPath $freshBuild)) 'recent build file preserved'
     Assert ((Test-Path -LiteralPath $oldSource) -and (Test-Path -LiteralPath $oldNonProject)) 'old source and nonproject files preserved'
     Assert (Test-Path -LiteralPath $oldTrackedBuild) 'old Git-tracked build file preserved despite matching cleanup age and location'
+    Assert ((Test-Path -LiteralPath $unicodeTracked) -and
+        ([IO.File]::ReadAllText($unicodeTracked) -ceq 'unicode tracked bytes')) 'Unicode Git-tracked old output exact bytes preserved'
+    Assert ((Test-Path -LiteralPath $embeddedTracked) -and
+        (Test-Path -LiteralPath $embeddedMetadata) -and
+        ([IO.File]::ReadAllText($embeddedTracked) -ceq 'nested tracked content')) 'nested repository source and Git metadata preserved'
+    Assert ((Test-Path -LiteralPath $worktreeMarker) -and
+        ([IO.File]::ReadAllText($worktreeSource) -ceq 'worktree source content')) 'nested worktree .git-file marker and source preserved'
+    Assert ((Test-Path -LiteralPath $foreignMarker) -and
+        ([IO.File]::ReadAllText($foreignBuild) -ceq 'foreign repository build bytes')) 'nested submodule project untouched'
     Assert ((Test-Path -LiteralPath $protectedArtifact) -and (Test-Path -LiteralPath $protectedGit)) 'artifact evidence and Git bytes preserved'
     Assert (Test-Path -LiteralPath $outside) 'junction target preserved after confirmed cleanup'
 
