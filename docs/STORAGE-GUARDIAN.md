@@ -1,6 +1,6 @@
 # AutoFight Storage Guardian
 
-> **Development status (2026-11-16):** Working and tested on AMD-DESKTOP. Independent post-fix code/architecture review **PASS**; main integration pending. No real AutoFight build files or evidence have been deleted.
+> **Development status (2026-11-16):** Reviewed Storage Guardian is integrated into local `main` at `9eca9fb` on AMD-DESKTOP. Independent post-fix code/architecture review **PASS**. No real AutoFight build files or evidence have been deleted.
 
 The guardian monitors **on-disk growth**. This is separate from .NET managed-memory garbage collection.
 
@@ -55,7 +55,7 @@ Tests create a separate, uniquely named **disposable** fixture under ignored `ar
 - First recorded local history sample: **930.23 MiB**, before the audit was broadened to include repository-root files.
 - Full .NET 10 Release build passed with **0 warnings/errors**; **173 Core + 232 Windows + 39 Guest = 444/444 specs**, plus **7/7 WPF nonshown smoke checks**, all passed (no application source changed).
 - PowerShell parser reported **0 syntax errors**; PSScriptAnalyzer was unavailable.
-- Independent reviewer `/root/guardian_review` initially found two P1 blockers (nested Git repositories and Windows PowerShell 5.1 Unicode tracked names). Both were fixed. Independent **post-fix review PASS**, with **0 new P0/P1**: source SHA-256 `3a5f87fb…cbd70fb`, test SHA-256 `3da542c0…8c50f5b`, 54/54 regression assertions, seven extra in-memory boundary checks and read-only real Preview. Reviewer did not modify files; non-atomic filesystem races and concurrent Clean remain limitations. GitHub draft pull request [#1](https://github.com/360madden/AutoFight/pull/1) is the review candidate; no real cleanup or weekly scheduling has been performed.
+- Independent reviewer `/root/guardian_review` initially found two P1 blockers (nested Git repositories and Windows PowerShell 5.1 Unicode tracked names). Both were fixed. Independent **post-fix review PASS**, with **0 new P0/P1**: source SHA-256 `3a5f87fb…cbd70fb`, test SHA-256 `3da542c0…8c50f5b`, 54/54 regression assertions, seven extra in-memory boundary checks and read-only real Preview. Reviewer did not modify files; non-atomic filesystem races and concurrent Clean remain limitations. The changes were fast-forwarded into local `main` after review; [GitHub PR #1](https://github.com/360madden/AutoFight/pull/1) was the original review candidate. No real cleanup or weekly scheduling has been performed.
 
 ## Current limits and next stage
 
