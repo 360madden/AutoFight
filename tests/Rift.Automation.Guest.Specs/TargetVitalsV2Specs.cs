@@ -490,6 +490,95 @@ internal static class TargetVitalsV2Specs
                 received.EnvelopeSha256 == candidate.EnvelopeSha256,
                 "physical host retains exact producer data without qualification");
         });
+        test("target vitals v2 multi-scan guest-to-host lifecycle stays diagnostic only", () =>
+        {
+            const string nonce = "0123456789abcdef0123456789abcdef";
+            var id = Guid.NewGuid();
+            var token = new string('b', 40);
+            var binding = new Rift.Automation.Windows.PhysicalTelemetryBinding(
+                id, nonce, 1234, 638000000000000000,
+                @"C:\RIFT\rift_x64.exe", new string('c', 64));
+            var host = new Rift.Automation.Windows.PhysicalTelemetryIngest(binding, token);
+            var at = new DateTimeOffset(2026, 11, 16, 22, 0, 0, TimeSpan.Zero);
+            byte[] Frame(long producerSequence, string targetId, double health) =>
+                Encoding.ASCII.GetBytes("RR2L1|" + nonce + "|AFT2|" +
+                    System.Text.Json.JsonSerializer.Serialize(new {
+                        schemaVersion = 2, sequence = producerSequence, epoch = 1,
+                        clock = producerSequence + 10.5, playerId = "p", targetId,
+                        health, healthMax = 100.0
+                    }) + "|ENDAFT2|ENDRR2L1");
+            TargetVitalsCandidateDiagnostic Diagnostic(bool identityStable, params byte[][] frames)
+            {
+                // Each synthetic scan owns a fresh accumulator; heap copies in one
+                // scan are evaluated together, not mistaken for a producer stream.
+                var accumulator = new TargetVitalsV2CandidateAccumulator(nonce);
+                foreach (var frame in frames)
+                {
+                    accumulator.ResetMemoryBoundary();
+                    var split = frame.Length / 2;
+                    accumulator.Feed(frame.AsSpan(0, split));
+                    accumulator.Feed(frame.AsSpan(split));
+                }
+                var scan = new LiveScanResult(true, "complete", 4096, 4096, frames.Length,
+                    TimeSpan.Zero, [], 0, 0, null)
+                { TargetVitalsCandidates = accumulator.Candidates };
+                return TargetVitalsCandidateReporting.Build(scan, nonce, identityStable);
+            }
+            var scanReport = new LiveScanReport("complete", true, 4096, 4096, 1, 0, 0, 0, 0, 0, null);
+            var rr2 = new LiveRiftReader2Report(
+                1, "unbound", "unavailable", null, 0, 0, null, null,
+                5000, null, "not-found", null, null, null, null, null, scanReport);
+            bool Deliver(long outer, TargetVitalsCandidateDiagnostic diagnostic)
+            {
+                var receivedAt = at.AddMilliseconds(outer * 100);
+                var snapshot = new LiveReaderSnapshot(
+                    1, id, nonce, outer, receivedAt.ToString("O"), outer * 100, "running", null,
+                    new LiveTargetReport(binding.GameProcessId, binding.GameProcessStartUtcTicks,
+                        binding.GameExecutablePath, binding.GameExecutableSha256, nonce),
+                    rr2, new LiveDeliveryReport(true, "ready", null, null, null))
+                { TargetVitalsCandidate = diagnostic };
+                var json = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(snapshot, JsonFormat.Options);
+                return host.Accept(json, token, "127.0.0.1", receivedAt);
+            }
+            var a1 = Frame(2, "target-a", 40);
+            var a2 = Frame(3, "target-a", 30);
+            var b1 = Frame(4, "target-b", 25);
+            check(Deliver(1, Diagnostic(true, a1)), "first synthetic frame delivered");
+            var first = host.Latest?.TargetVitals;
+            check(first is { TargetId: "target-a", Sequence: 2, Health: 40,
+                ProducerClock: 12.5, SourceQualified: false }, "initial producer tuple retained");
+            check(Deliver(2, Diagnostic(true, a2, a1)), "advancing synthetic producer selected despite reverse heap order");
+            var advanced = host.Latest?.TargetVitals;
+            check(advanced is { TargetId: "target-a", Sequence: 3, Health: 30,
+                ProducerClock: 13.5, SourceQualified: false } &&
+                first is not null && advanced.FrameSha256 != first.FrameSha256, "genuine changed frame is still unqualified");
+            check(Deliver(3, Diagnostic(true, a1, a2)), "repeated producer selected despite forward heap order and newer transport");
+            check(host.Latest?.TargetVitals is { Sequence: 3, Health: 30, SourceQualified: false },
+                "new outer receipt alone never advances producer or grants authority");
+            var conflict = Diagnostic(true, a2, b1);
+            check(conflict.Status == "conflict" && conflict.Health is null &&
+                Deliver(4, conflict) && host.Latest?.TargetVitals is null &&
+                host.Latest?.TargetVitalsStatus == "conflict",
+                "mixed current and old targets suppress health without selecting arbitrary heap copy");
+            check(Deliver(5, Diagnostic(true, b1)) &&
+                host.Latest?.TargetVitals is { TargetId: "target-b", Sequence: 4, Health: 25,
+                    SourceQualified: false }, "isolated new target remains diagnostic only");
+            check(Deliver(6, Diagnostic(true)) &&
+                host.Latest?.TargetVitals is null &&
+                host.Latest?.TargetVitalsStatus == "not-found",
+                "empty scan clears prior target");
+            check(Deliver(7, Diagnostic(true, b1)) &&
+                host.ReadFresh(at.AddMilliseconds(750), TimeSpan.FromSeconds(1))?.TargetVitals
+                    is { TargetId: "target-b", SourceQualified: false },
+                "reappearance is reported without inventing source freshness");
+            check(Deliver(8, Diagnostic(false, b1)) &&
+                host.Latest?.TargetVitals is null &&
+                host.Latest?.TargetVitalsStatus == "unavailable",
+                "source identity failure redacts all producer health");
+            check(Deliver(9, Diagnostic(true, b1)) &&
+                host.Latest?.TargetVitals is { TargetId: "target-b", SourceQualified: false },
+                "new diagnostic can recover only as unqualified candidate");
+        });
         test("target vitals v2 preserves legacy RR2A1 isolation", () =>
         {
             bool rejected;
