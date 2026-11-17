@@ -105,48 +105,14 @@ public sealed class PhysicalTelemetryIngest
             }
             else if (target.ValueKind != JsonValueKind.Null) return false;
 
-            string? vitalsStatus = null;
-            long? vitalsSequence = null;
-            PhysicalTargetVitalsCandidate? parsedVitals = null;
-            if (root.TryGetProperty("targetVitalsCandidate", out var vitals) &&
-                vitals.ValueKind == JsonValueKind.Object)
+            var boundRunningGame = target.ValueKind == JsonValueKind.Object && status == "running";
+            if (!TryParseVitals(root, boundRunningGame,
+                out var vitalsStatus, out var vitalsSequence, out var parsedVitals))
             {
-                if (!Unique(vitals) || vitals.EnumerateObject().Any(p =>
-                    p.Name is not ("status" or "candidateCount" or "sequence" or
-                        "targetId" or "health" or "healthMax" or "playerId" or
-                        "epoch" or "producerClock" or "envelopeSha256" or "frameSha256")))
-                    return false;
-                if (vitals.TryGetProperty("candidateCount", out var count) &&
-                    (count.ValueKind != JsonValueKind.Number || !count.TryGetInt32(out var n) ||
-                        n < 0 || n > 4096))
-                    return false;
-                vitalsStatus = vitals.GetProperty("status").GetString();
-                if (vitalsStatus is not ("unavailable" or "not-found" or "conflict" or "candidate-unqualified"))
-                    return false;
-                if (vitals.TryGetProperty("sequence", out var seq))
-                {
-                    if (seq.ValueKind == JsonValueKind.Number)
-                    {
-                        vitalsSequence = seq.GetInt64();
-                        if (vitalsSequence is < 1 or > 9007199254740991 ||
-                            vitalsStatus != "candidate-unqualified") return false;
-                    }
-                    else if (seq.ValueKind != JsonValueKind.Null) return false;
-                }
-                if (vitalsStatus == "candidate-unqualified")
-                {
-                    if (vitalsSequence is not long candidateSequence) return false;
-                    if (vitals.TryGetProperty("candidateCount", out var candidateCount) &&
-                        (candidateCount.GetInt32() is < 1 or > 256)) return false;
-                    parsedVitals = ParseTargetVitalsCandidate(vitals, candidateSequence);
-                }
-                // No health candidate survives missing identity or a stopped reader.
-                if (target.ValueKind == JsonValueKind.Null || status != "running")
-                {
-                    vitalsStatus = null;
-                    vitalsSequence = null;
-                    parsedVitals = null;
-                }
+                // Only a newer, authenticated report from the exact pinned game can
+                // revoke diagnostics; unbound/mismatched traffic and replay cannot.
+                if (boundRunningGame) RevokeMalformedVitalsIfNewer(sequence);
+                return false;
             }
             lock (gate)
             {
@@ -157,6 +123,84 @@ public sealed class PhysicalTelemetryIngest
                 {
                     TargetVitals = parsedVitals
                 };
+            }
+            return true;
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException or
+            KeyNotFoundException or FormatException or OverflowException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    // Never alter accepted transport receipt metadata on a rejected diagnostic.
+    // Consume the malformed report's newer outer sequence so delayed frames
+    // cannot restore a stale candidate. Initial invalid traffic has no cache to revoke.
+    private void RevokeMalformedVitalsIfNewer(long sequence)
+    {
+        lock (gate)
+        {
+            if (terminated || latest is null || sequence <= lastSequence) return;
+            lastSequence = sequence;
+            latest = latest with
+            {
+                TargetVitalsStatus = null,
+                TargetVitalsSequence = null,
+                TargetVitals = null
+            };
+        }
+    }
+
+    private static bool TryParseVitals(
+        JsonElement root,
+        bool boundRunningGame,
+        out string? vitalsStatus,
+        out long? vitalsSequence,
+        out PhysicalTargetVitalsCandidate? parsedVitals)
+    {
+        vitalsStatus = null;
+        vitalsSequence = null;
+        parsedVitals = null;
+        if (!root.TryGetProperty("targetVitalsCandidate", out var vitals) ||
+            vitals.ValueKind == JsonValueKind.Null)
+            return true;
+        if (vitals.ValueKind != JsonValueKind.Object) return false;
+        try
+        {
+            if (!Unique(vitals) || vitals.EnumerateObject().Any(p =>
+                p.Name is not ("status" or "candidateCount" or "sequence" or
+                    "targetId" or "health" or "healthMax" or "playerId" or
+                    "epoch" or "producerClock" or "envelopeSha256" or "frameSha256")))
+                return false;
+            if (vitals.TryGetProperty("candidateCount", out var count) &&
+                (count.ValueKind != JsonValueKind.Number || !count.TryGetInt32(out var n) ||
+                    n < 0 || n > 4096))
+                return false;
+            vitalsStatus = vitals.GetProperty("status").GetString();
+            if (vitalsStatus is not ("unavailable" or "not-found" or "conflict" or "candidate-unqualified"))
+                return false;
+            if (vitals.TryGetProperty("sequence", out var seq))
+            {
+                if (seq.ValueKind == JsonValueKind.Number)
+                {
+                    vitalsSequence = seq.GetInt64();
+                    if (vitalsSequence is < 1 or > 9007199254740991 ||
+                        vitalsStatus != "candidate-unqualified") return false;
+                }
+                else if (seq.ValueKind != JsonValueKind.Null) return false;
+            }
+            if (vitalsStatus == "candidate-unqualified")
+            {
+                if (vitalsSequence is not long candidateSequence) return false;
+                if (vitals.TryGetProperty("candidateCount", out var candidateCount) &&
+                    (candidateCount.GetInt32() is < 1 or > 256)) return false;
+                parsedVitals = ParseTargetVitalsCandidate(vitals, candidateSequence);
+            }
+            if (!boundRunningGame)
+            {
+                vitalsStatus = null;
+                vitalsSequence = null;
+                parsedVitals = null;
             }
             return true;
         }

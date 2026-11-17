@@ -263,6 +263,128 @@ internal static class PhysicalTelemetryIngestSpecs
             check(ingest.Latest?.TargetVitals is null &&
                 ingest.Latest?.TargetVitalsSequence is null, "no stale candidate exposure");
         });
+        test("Physical ingest malformed newer pinned vitals revokes stale diagnostic and fences replay", () =>
+        {
+            var id = Guid.NewGuid();
+            var nonce = new string('a', 32);
+            var token = new string('b', 40);
+            var binding = new PhysicalTelemetryBinding(id, nonce, 1234, 638000000000000000,
+                @"C:\RIFT\rift_x64.exe", new string('c', 64));
+            byte[] Frame(long outer, object? candidate, int processId = 1234) =>
+                JsonSerializer.SerializeToUtf8Bytes(new {
+                    schemaVersion = 1, instanceId = id, nonce, sequence = outer, readerStatus = "running",
+                    target = new {
+                        processId, processStartUtcTicks = binding.GameProcessStartUtcTicks,
+                        executablePath = binding.GameExecutablePath,
+                        executableSha256 = binding.GameExecutableSha256,
+                        readerSessionNonce = nonce
+                    },
+                    targetVitalsCandidate = candidate
+                });
+            var full = new {
+                status = "candidate-unqualified", candidateCount = 1, sequence = 7,
+                playerId = "p", targetId = "t", epoch = 2, producerClock = 12.5,
+                health = 40.0, healthMax = 100.0,
+                envelopeSha256 = new string('A', 64), frameSha256 = new string('B', 64)
+            };
+            var unknown = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(full))!.AsObject();
+            unknown["extra"] = 1;
+            object[] malformed = [
+                new { full.status, full.sequence, full.playerId, full.health },
+                full with { health = 140.0 },
+                full with { epoch = 0 },
+                full with { producerClock = -1.0 },
+                full with { frameSha256 = "bad" },
+                full with { candidateCount = 257 },
+                full with { status = "unrecognized" },
+                new { full.status, sequence = "seven" },
+                unknown,
+                "unexpected-type"
+            ];
+            var now = new DateTimeOffset(2026, 11, 16, 21, 0, 0, TimeSpan.Zero);
+            foreach (var bad in malformed)
+            {
+                var ingest = new PhysicalTelemetryIngest(binding, token);
+                check(ingest.Accept(Frame(10, full), token, "127.0.0.1", now), "seed pinned candidate");
+                var original = ingest.Latest!;
+                check(!ingest.Accept(Frame(11, bad), token, "127.0.0.1", now.AddMilliseconds(50)),
+                    "newer malformed candidate rejected");
+                var after = ingest.Latest;
+                check(after is not null && after.Sequence == original.Sequence &&
+                    after.ReaderStatus == original.ReaderStatus &&
+                    after.ReceivedAtUtc == original.ReceivedAtUtc &&
+                    after.TargetVitals is null && after.TargetVitalsStatus is null &&
+                    after.TargetVitalsSequence is null, "no older candidate survives newer invalid diagnostic");
+                check(ingest.ReadFresh(now.AddMilliseconds(100), TimeSpan.FromSeconds(1))?.TargetVitals is null,
+                    "fresh last-valid receipt cannot expose stale candidate after fault");
+                check(!ingest.Accept(Frame(11, full), token, "127.0.0.1", now.AddMilliseconds(150)),
+                    "invalid outer sequence cannot be reused to resurrect the diagnostic");
+                check(ingest.Accept(Frame(12, full), token, "127.0.0.1", now.AddMilliseconds(200)) &&
+                    ingest.Latest?.TargetVitals is { SourceQualified: false },
+                    "strictly newer valid report recovers diagnostic without combat authority");
+                check(!ingest.Accept(Frame(13, bad), "wrong", "127.0.0.1", now.AddMilliseconds(250)) &&
+                    !ingest.Accept(Frame(13, bad), token, "192.168.1.1", now.AddMilliseconds(250)) &&
+                    !ingest.Accept(Frame(13, bad, processId: 999), token, "127.0.0.1", now.AddMilliseconds(250)) &&
+                    !ingest.Accept(Frame(11, bad), token, "127.0.0.1", now.AddMilliseconds(250)) &&
+                    ingest.Latest?.TargetVitals is { SourceQualified: false },
+                    "unauthorized, mismatched identity and older invalid replays cannot clear current candidate");
+            }
+        });
+        test("Physical ingest duplicate vitals and out-of-order concurrent delivery stay fail-closed", () =>
+        {
+            var id = Guid.NewGuid();
+            var nonce = new string('a', 32);
+            var token = new string('b', 40);
+            var binding = new PhysicalTelemetryBinding(id, nonce, 1234, 638000000000000000,
+                @"C:\RIFT\rift_x64.exe", new string('c', 64));
+            byte[] Frame(long outer, object candidate, bool bound = true,
+                int schema = 1, string readerStatus = "running") =>
+                JsonSerializer.SerializeToUtf8Bytes(new {
+                    schemaVersion = schema, instanceId = id, nonce, sequence = outer, readerStatus,
+                    target = bound ? (object)new {
+                        processId = binding.GameProcessId,
+                        processStartUtcTicks = binding.GameProcessStartUtcTicks,
+                        executablePath = binding.GameExecutablePath,
+                        executableSha256 = binding.GameExecutableSha256,
+                        readerSessionNonce = nonce
+                    } : null,
+                    targetVitalsCandidate = candidate
+                });
+            var full = new {
+                status = "candidate-unqualified", candidateCount = 1, sequence = 7,
+                playerId = "p", targetId = "t", epoch = 2, producerClock = 12.5,
+                health = 40.0, healthMax = 100.0,
+                envelopeSha256 = new string('A', 64), frameSha256 = new string('B', 64)
+            };
+            var bad = full with { health = 400.0 };
+            var now = new DateTimeOffset(2026, 11, 16, 21, 0, 0, TimeSpan.Zero);
+            var ingest = new PhysicalTelemetryIngest(binding, token);
+            check(ingest.Accept(Frame(10, full), token, "127.0.0.1", now), "seed");
+            check(!ingest.Accept(Frame(11, bad, bound: false), token, "127.0.0.1", now) &&
+                !ingest.Accept(Frame(11, bad, schema: 2), token, "127.0.0.1", now) &&
+                !ingest.Accept(Frame(11, bad, readerStatus: "unavailable"), token, "127.0.0.1", now),
+                "unbound, outer schema and unavailable status reports reject");
+            check(ingest.Latest?.TargetVitals is { SourceQualified: false },
+                "unverified outer reports do not revoke authenticated pinned cache");
+            var originalJson = Encoding.UTF8.GetString(Frame(11, full));
+            var duplicate = originalJson.Replace("\"targetId\":\"t\"",
+                "\"targetId\":\"t\",\"targetId\":\"other\"", StringComparison.Ordinal);
+            check(!string.Equals(duplicate, originalJson, StringComparison.Ordinal), "duplicate fixture constructed");
+            check(!ingest.Accept(Encoding.UTF8.GetBytes(duplicate), token, "127.0.0.1", now),
+                "duplicate inner JSON field rejected");
+            check(ingest.Latest is { TargetVitals: null, TargetVitalsStatus: null, TargetVitalsSequence: null },
+                "duplicate inner field revokes prior candidate");
+            var concurrent = new PhysicalTelemetryIngest(binding, token);
+            check(concurrent.Accept(Frame(10, full), token, "127.0.0.1", now), "parallel seed");
+            var invalid = Task.Run(() => concurrent.Accept(Frame(11, bad),
+                token, "127.0.0.1", now.AddMilliseconds(100)));
+            var valid = Task.Run(() => concurrent.Accept(Frame(12, full),
+                token, "127.0.0.1", now.AddMilliseconds(200)));
+            Task.WaitAll(invalid, valid);
+            var final = concurrent.Latest;
+            check(!invalid.Result && valid.Result && final is { Sequence: 12, TargetVitals: { SourceQualified: false } },
+                "higher valid report wins irrespective of concurrent arrival order");
+        });
         test("Physical ingest rejects partial, malformed and unknown target-vitals provenance", () =>
         {
             var id = Guid.NewGuid();
